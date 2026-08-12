@@ -1,0 +1,27 @@
+{
+  "name": "chromai-leads-cms",
+  "version": "1.0.0",
+  "description": "科诺美(Chromai) 线索跟进管理系统 - 含CMS后台",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "vercel-build": "echo 'Static build, no build step needed'"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.22.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "chromai",
+    "hplc",
+    "leads",
+    "crm",
+    "cms"
+  ],
+  "author": "科诺美市场中心",
+  "license": "MIT"
+}
