@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>科诺美 CMS 管理后台</title>
+<style>
+:root{
+  --bg:#f0f2f7;--surface:#fff;--border:#dfe3ee;--th-bg:#eef1f7;
+  --text:#1a1d27;--text2:#5a5e72;--text3:#9499a8;
+  --blue:#2563EB;--green:#1D9E75;--amber:#BA7517;--red:#EF4444;
+  --shadow:0 1px 3px rgba(0,0,0,.08);--font:'Segoe UI','Microsoft YaHei',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+.brand{font-weight:700;font-size:18px;color:var(--blue)}
+.brand span{color:var(--text2);font-weight:400;font-size:13px;margin-left:8px}
+.container{max-width:960px;margin:0 auto;padding:24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
+.card h2{font-size:16px;margin-bottom:12px;color:var(--text)}
+.card h3{font-size:14px;margin:12px 0 8px;color:var(--text2)}
+button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:5px;cursor:pointer;font-size:13px;font-family:var(--font);margin-right:6px}
+button:hover{border-color:var(--blue);color:var(--blue)}
+button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+button.primary:hover{background:#1d4ed8}
+button.danger{background:var(--red);border-color:var(--red);color:#fff}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;box-shadow:var(--shadow)}
+.stat .num{font-size:28px;font-weight:700;color:var(--blue)}
+.stat .lbl{font-size:12px;color:var(--text2);margin-top:4px}
+.info{font-size:13px;color:var(--text2);line-height:1.8}
+.info b{color:var(--text)}
+.code{background:var(--th-bg);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-family:monospace;font-size:12px;margin:8px 0;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
+th,td{border:1px solid var(--border);padding:6px 10px;text-align:left}
+th{background:var(--th-bg);color:var(--text2);font-weight:600}
+.toast{position:fixed;top:20px;right:20px;background:var(--green);color:#fff;padding:8px 16px;border-radius:6px;font-size:13px;z-index:999;animation:fade .3s}
+@keyframes fade{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.api-list td:first-child{font-weight:600;color:var(--blue)}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">科诺美 Chromai <span>CMS 管理后台</span></div>
+  <div>
+    <a href="/"><button>返回主系统</button></a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="stats-row" id="statsRow">
+    <div class="stat"><div class="num" id="statLeads">-</div><div class="lbl">线索总数</div></div>
+    <div class="stat"><div class="num" id="statFups">-</div><div class="lbl">跟进记录</div></div>
+    <div class="stat"><div class="num" id="statVersion">1.0</div><div class="lbl">系统版本</div></div>
+    <div class="stat"><div class="num" id="statStatus">●</div><div class="lbl">服务状态</div></div>
+  </div>
+
+  <div class="card">
+    <h2>系统状态</h2>
+    <div class="info" id="statusInfo">正在连接服务器...</div>
+  </div>
+
+  <div class="card">
+    <h2>数据管理</h2>
+    <h3>导出数据</h3>
+    <p class="info">将服务器端所有数据导出为 JSON 文件（线索 + 跟进 + 流程图 + MQL评分）</p>
+    <button class="primary" onclick="exportData()">导出全部数据</button>
+    
+    <h3>导入数据</h3>
+    <p class="info">从 JSON 文件导入数据（将覆盖现有服务器数据）</p>
+    <input type="file" id="importFile" accept=".json" style="margin:8px 0">
+    <button onclick="importData()">导入数据</button>
+    
+    <h3>从浏览器同步</h3>
+    <p class="info">将当前浏览器中 localStorage 的数据上传到服务器（全量覆盖服务器数据）</p>
+    <button class="primary" onclick="syncFromBrowser()">从浏览器同步到服务器</button>
+    <button onclick="syncToBrowser()">从服务器同步到浏览器</button>
+  </div>
+
+  <div class="card">
+    <h2>API 接口文档</h2>
+    <table class="api-list">
+      <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>GET</td><td>/api/status</td><td>获取系统状态</td></tr>
+        <tr><td>GET</td><td>/api/leads</td><td>获取全部线索数据</td></tr>
+        <tr><td>POST</td><td>/api/leads</td><td>保存全部线索（全量覆盖）</td></tr>
+        <tr><td>POST</td><td>/api/leads/add</td><td>追加一条线索</td></tr>
+        <tr><td>PUT</td><td>/api/leads/:index</td><td>更新指定线索</td></tr>
+        <tr><td>DELETE</td><td>/api/leads/:index</td><td>删除指定线索</td></tr>
+        <tr><td>GET</td><td>/api/followups</td><td>获取全部跟进记录</td></tr>
+        <tr><td>POST</td><td>/api/followups</td><td>保存全部跟进记录</td></tr>
+        <tr><td>GET</td><td>/api/flowchart</td><td>获取流程图数据</td></tr>
+        <tr><td>POST</td><td>/api/flowchart</td><td>保存流程图数据</td></tr>
+        <tr><td>GET</td><td>/api/mql</td><td>获取MQL评分数据</td></tr>
+        <tr><td>POST</td><td>/api/mql</td><td>保存MQL评分数据</td></tr>
+        <tr><td>GET</td><td>/api/export/all</td><td>导出全部数据为JSON</td></tr>
+        <tr><td>POST</td><td>/api/import/all</td><td>导入全部数据</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>部署信息</h2>
+    <div class="info">
+      <b>本地开发：</b> <div class="code">node server.js</div>
+      <b>CloudStudio：</b> 自动部署，访问端口 3000
+      <b>Vercel：</b> 连接 GitHub 仓库后自动部署
+      <b>GitHub：</b> <div class="code">git push origin main</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+async function loadStatus() {
+  try {
+    const res = await fetch(API + '/api/status');
+    const data = await res.json();
+    document.getElementById('statLeads').textContent = data.leadsCount || 0;
+    document.getElementById('statFups').textContent = data.followupsCount || 0;
+    document.getElementById('statStatus').textContent = '●运行中';
+    document.getElementById('statStatus').style.color = '#1D9E75';
+    document.getElementById('statusInfo').innerHTML = 
+      '<b>状态：</b> ' + data.status + '<br>' +
+      '<b>版本：</b> ' + data.version + '<br>' +
+      '<b>线索数：</b> ' + data.leadsCount + '<br>' +
+      '<b>跟进数：</b> ' + data.followupsCount + '<br>' +
+      '<b>运行时间：</b> ' + Math.round(data.uptime) + ' 秒<br>' +
+      '<b>时间戳：</b> ' + data.timestamp;
+  } catch(e) {
+    document.getElementById('statStatus').textContent = '●离线';
+    document.getElementById('statStatus').style.color = '#EF4444';
+    document.getElementById('statusInfo').innerHTML = '<b style="color:var(--red)">服务器未连接</b><br>请确保后端服务已启动（node server.js）';
+  }
+}
+
+async function exportData() {
+  window.location.href = API + '/api/export/all';
+}
+
+async function importData() {
+  const file = document.getElementById('importFile').files[0];
+  if (!file) { showToast('请选择文件', 'warn'); return; }
+  const text = await file.text();
+  try {
+    const data = JSON.parse(text);
+    const res = await fetch(API + '/api/import/all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    showToast(result.message || '导入成功');
+    loadStatus();
+  } catch(e) {
+    showToast('导入失败：' + e.message, 'err');
+  }
+}
+
+async function syncFromBrowser() {
+  const STORAGE_KEY = 'chromai_leads_v13';
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) { showToast('浏览器中无数据', 'warn'); return; }
+  const parsed = JSON.parse(saved);
+  const payload = {
+    leads: { data: parsed.leads, headers: parsed.leadsHeaders },
+    followups: { data: parsed.fups, headers: parsed.fupHeaders },
+    flowchart: {
+      stages: parsed.flowStages, phases: parsed.flowPhases, branch: parsed.flowBranch,
+      title: parsed.flowTitle, subtitle: parsed.flowSubtitle, footer: parsed.flowFooter
+    },
+    mql: {
+      dimensions: parsed.mqlDimensions, title: parsed.mqlTitle, subtitle: parsed.mqlSubtitle,
+      totalVal: parsed.mqlTotalVal, totalLbl: parsed.mqlTotalLbl, totalHint: parsed.mqlTotalHint, note: parsed.mqlNote
+    }
+  };
+  const res = await fetch(API + '/api/import/all', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const result = await res.json();
+  showToast(result.message || '同步成功');
+  loadStatus();
+}
+
+async function syncToBrowser() {
+  const [leadsRes, fupsRes, flowRes, mqlRes] = await Promise.all([
+    fetch(API + '/api/leads'), fetch(API + '/api/followups'),
+    fetch(API + '/api/flowchart'), fetch(API + '/api/mql')
+  ]);
+  const leads = await leadsRes.json();
+  const fups = await fupsRes.json();
+  const flow = await flowRes.json();
+  const mql = await mqlRes.json();
+  const STORAGE_KEY = 'chromai_leads_v13';
+  const data = {
+    leads: leads.data || [], fups: fups.data || [],
+    leadsHeaders: leads.headers || [], fupHeaders: fups.headers || [],
+    flowStages: flow.stages, flowPhases: flow.phases, flowBranch: flow.branch,
+    flowTitle: flow.title, flowSubtitle: flow.subtitle, flowFooter: flow.footer,
+    mqlDimensions: mql.dimensions, mqlTitle: mql.title, mqlSubtitle: mql.subtitle,
+    mqlTotalVal: mql.totalVal, mqlTotalLbl: mql.totalLbl, mqlTotalHint: mql.totalHint, mqlNote: mql.note
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  showToast('已同步到浏览器，刷新主系统即可查看');
+}
+
+function showToast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  if (type === 'warn') t.style.background = 'var(--amber)';
+  if (type === 'err') t.style.background = 'var(--red)';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+loadStatus();
+setInterval(loadStatus, 10000);
+</script>
+</body>
+</html>
