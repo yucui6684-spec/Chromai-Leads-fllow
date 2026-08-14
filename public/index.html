@@ -96,6 +96,7 @@ td{position:relative}
 /* Inline edit */
 td.editable{cursor:pointer;transition:background .15s}
 td.editable:hover{background:rgba(55,138,221,.1)!important}
+td.cell-selected{outline:2px solid #378ADD;outline-offset:-2px;background:rgba(55,138,221,.08)!important}
 td.range-selected{outline:2px solid #378ADD;outline-offset:-2px;background:rgba(55,138,221,.15)!important;position:relative;z-index:1}
 td.range-anchor{outline:2px solid #639922;outline-offset:-2px;background:rgba(99,153,34,.12)!important;position:relative;z-index:2}
 td.editing{padding:0}
@@ -503,10 +504,16 @@ const SCALE_OPTIONS = ['未知','50人以下','50-100人','100-500人','500-1000
 let leadsData = [], fupsData = [];
 let activeTab = 'dashboard';
 let editingCell = null;
-let lastTd = null;  // 最后操作的单元格，用于 Ctrl+C/V
+let lastTd = null;  // 最后操作的单元格，用于 Ctrl+C/V/Delete
 let selAnchor = null;  // 选区锚点 {td, row, col}
 let selRange = null;   // 选区范围 {r1,c1,r2,c2} 归一化后
 let isDirty = false;
+
+// 标记当前选中单元格（视觉高亮）
+function markSelectedCell(td) {
+  document.querySelectorAll('td.cell-selected').forEach(function(el) { el.classList.remove('cell-selected'); });
+  if (td) td.classList.add('cell-selected');
+}
 
 // ---- 流程示意图 & MQL评分 可编辑数据 ----
 let flowStages = [
@@ -41457,6 +41464,7 @@ function renderLeads() {
     } else {
       tds += `<span style="font-size:10px;color:var(--text3)">已跟进</span>`;
     }
+    tds += ` <button class="danger small" style="font-size:10px;padding:2px 4px" onclick="event.stopPropagation();deleteLeadRow(${origIdx})" title="删除此条线索">✕</button>`;
     tds += `</td>`;
     tds += `</tr>`;
     return tds;
@@ -41467,7 +41475,7 @@ function renderLeads() {
     const delBtn = i >= LEADS_SYSTEM_COLS
       ? `<span class="col-del" onclick="event.stopPropagation();removeColumn('leads',${i})" title="删除此列">✕</span>` : '';
     return `<th>${h(hd)}${delBtn}</th>`;
-  }).join('') + '<th style="width:70px;text-align:center">操作</th>';
+  }).join('') + '<th style="width:90px;text-align:center">操作</th>';
 
   const html = filterHtml + `
 <div class="filter-row">
@@ -41477,7 +41485,7 @@ function renderLeads() {
 </div>
 <div class="table-wrap">
   <table>
-    <colgroup>${LEADS_HEADERS.map((_,i)=>`<col>`).join('')}<col style="width:70px"></colgroup>
+    <colgroup>${LEADS_HEADERS.map((_,i)=>`<col>`).join('')}<col style="width:90px"></colgroup>
     <thead><tr>${headerHtml}</tr></thead>
     <tbody>${rows}</tbody>
   </table>
@@ -41948,6 +41956,7 @@ function getSourceArray() {
 function startEdit(td) {
   if (editingCell) finishEdit();
   lastTd = td;
+  markSelectedCell(td);
   
   const col = parseInt(td.dataset.col);
   const type = td.dataset.type;
@@ -41966,6 +41975,11 @@ function startEdit(td) {
     }
     const sel = document.createElement('select');
     sel.style.cssText = 'width:100%;height:100%;min-height:26px;background:var(--bg);border:2px solid var(--blue);color:var(--text);font-size:12px;font-family:var(--font);padding:2px 4px;outline:none';
+    // 空选项 — 允许用户清空下拉框内容
+    var emptyOpt = document.createElement('option');
+    emptyOpt.value = ''; emptyOpt.textContent = '— 清空 —';
+    sel.appendChild(emptyOpt);
+    if (!curVal) emptyOpt.selected = true;
     options.forEach(o => {
       const opt = document.createElement('option');
       opt.value = o; opt.textContent = o;
@@ -42013,8 +42027,8 @@ function finishEdit(newVal) {
 
   // Update cell display inline — NO full re-render
   td.classList.remove('editing');
-  if (type === 'select' && activeTab === 'leads' && col === 11) {
-    // 阶段列 — 带 badge 样式
+  if (type === 'select' && activeTab === 'leads' && col === 11 && newVal) {
+    // 阶段列 — 带 badge 样式（空值不显示 badge）
     var bv = newVal;
     var bc = bv==='MQL'?'badge-mql':(bv==='Raw'?'badge-raw':(['SQL','商机推进','报价与谈判'].includes(bv)?'badge-sql':(bv==='成交签约'?'badge-won':'badge-lost')));
     td.innerHTML = '<span class="badge ' + bc + '">' + h(newVal) + '</span>';
@@ -42268,6 +42282,16 @@ function deleteFupRow(rowIdx) {
   render();
 }
 
+// ---- 删除线索 ----
+function deleteLeadRow(rowIdx) {
+  var lid = leadsData[rowIdx] ? (leadsData[rowIdx][0] || '') : '';
+  if (!confirm('确定删除线索 ' + lid + ' 吗？\n此操作不可恢复，关联的跟进记录不会被删除。')) return;
+  leadsData.splice(rowIdx, 1);
+  saveData();
+  toast('已删除线索 ' + lid, 'info');
+  render();
+}
+
 // ============================================================
 // 导出功能已禁用（数据保护）
 // ============================================================
@@ -42330,10 +42354,31 @@ document.addEventListener('keydown', function(e) {
   var tag = (e.target.tagName || '').toLowerCase();
   var isInput = (tag === 'input' || tag === 'textarea' || tag === 'select');
 
-  // Delete: 批量清空选区
-  if (e.key === 'Delete' && !isInput && selRange) {
+  // Delete/Backspace: 批量清空选区
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput && selRange) {
     e.preventDefault();
     batchClearRange();
+    return;
+  }
+
+  // Delete/Backspace: 清空单个选中单元格（非编辑状态）
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput && !editingCell && lastTd && lastTd.classList.contains('editable') && !selRange) {
+    e.preventDefault();
+    var _tr = lastTd.closest('tr');
+    if (!_tr) return;
+    var _rowIdx = parseInt(_tr.dataset.row);
+    var _col = parseInt(lastTd.dataset.col);
+    if (isNaN(_rowIdx) || isNaN(_col)) return;
+    var _src = getSourceArray();
+    if (!_src || !_src[_rowIdx]) return;
+    var _oldVal = _src[_rowIdx][_col];
+    if (_oldVal === '' || _oldVal === undefined || _oldVal === null) { toast('单元格已为空', 'info'); return; }
+    _src[_rowIdx][_col] = '';
+    markDirty();
+    // 更新单元格显示
+    lastTd.textContent = '';
+    updateHeaderStats();
+    toast('已清空单元格', 'info');
     return;
   }
 
@@ -42389,6 +42434,20 @@ document.addEventListener('keydown', function(e) {
     var colModal = document.getElementById('addColumnModal');
     if (colModal) { closeAddColumnModal(); return; }
     if (selRange) { clearRangeSelection(); toast('已取消选区', 'info'); return; }
+  }
+
+  // Enter: 选中单元格时进入编辑（非编辑状态）
+  if (e.key === 'Enter' && !isInput && !editingCell && lastTd && lastTd.classList.contains('editable')) {
+    e.preventDefault();
+    startEdit(lastTd);
+    return;
+  }
+
+  // F2: 进入编辑
+  if (e.key === 'F2' && !isInput && !editingCell && lastTd && lastTd.classList.contains('editable')) {
+    e.preventDefault();
+    startEdit(lastTd);
+    return;
   }
 
   // Ctrl+S / Cmd+S: 保存
