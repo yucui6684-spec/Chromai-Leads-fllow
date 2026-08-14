@@ -250,9 +250,50 @@ th .col-del:hover{opacity:1}
 .modal-box .form-field input:focus,.modal-box .form-field select:focus,.modal-box .form-field textarea:focus{outline:none;border-color:var(--blue)}
 .modal-box .form-field textarea{resize:vertical;min-height:50px}
 .modal-box .form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* ===== 密码保护覆盖层 ===== */
+#pwdOverlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;
+  background:linear-gradient(135deg,#f0f2f7 0%,#e3e8f0 100%);
+  display:flex;align-items:center;justify-content:center;
+}
+#pwdOverlay .pwd-box{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 8px 32px rgba(0,0,0,.12);padding:40px 48px;text-align:center;
+  max-width:380px;width:90%;
+}
+#pwdOverlay .pwd-logo{font-size:24px;font-weight:700;color:var(--text);margin-bottom:4px}
+#pwdOverlay .pwd-sub{font-size:13px;color:var(--text3);margin-bottom:24px}
+#pwdOverlay .pwd-input{
+  width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:8px;
+  font-size:15px;text-align:center;letter-spacing:2px;outline:none;
+  background:var(--bg);color:var(--text);transition:border-color .2s;
+}
+#pwdOverlay .pwd-input:focus{border-color:var(--blue)}
+#pwdOverlay .pwd-btn{
+  width:100%;margin-top:12px;padding:12px;border:none;border-radius:8px;
+  background:var(--blue);color:#fff;font-size:14px;font-weight:600;cursor:pointer;
+  transition:background .2s;
+}
+#pwdOverlay .pwd-btn:hover{background:#1d4ed8}
+#pwdOverlay .pwd-err{color:var(--red);font-size:12px;margin-top:8px;display:none}
+#pwdOverlay .pwd-hint{font-size:11px;color:var(--text3);margin-top:16px}
 </style>
 </head>
 <body>
+
+<!-- 密码保护覆盖层 -->
+<div id="pwdOverlay">
+  <div class="pwd-box">
+    <div class="pwd-logo">科诺美 Chromai</div>
+    <div class="pwd-sub">线索跟进管理系统 · 请输入密码访问</div>
+    <input type="password" class="pwd-input" id="pwdInput" placeholder="请输入访问密码" autocomplete="off"
+      onkeydown="if(event.key==='Enter')checkPwd()">
+    <button class="pwd-btn" onclick="checkPwd()">进入系统</button>
+    <div class="pwd-err" id="pwdErr">密码错误，请重新输入</div>
+    <div class="pwd-hint">仅限授权人员访问 · 数据不可导出</div>
+  </div>
+</div>
 
 <header>
   <div class="brand">科诺美 Chromai <span>线索跟进管理系统</span></div>
@@ -264,7 +305,6 @@ th .col-del:hover{opacity:1}
   </div>
   <div class="actions">
     <button onclick="resetData()" class="danger small" title="清空本地修改，恢复初始数据">重置数据</button>
-    <button onclick="exportCSV()" title="导出CSV">导出CSV</button>
 
     <button onclick="manualSave()" class="primary" id="btnSave" title="保存所有修改到本地">💾 保存</button>
     <button onclick="showAddLeadForm()" title="在线索池中新增一条线索">+ 新增线索</button>
@@ -283,6 +323,50 @@ th .col-del:hover{opacity:1}
 <div id="toastContainer"></div>
 
 <script>
+// ============================================================
+// 密码保护 & 防下载
+// ============================================================
+const ACCESS_PASSWORD = 'chromai2019';
+const PWD_KEY = 'chromai_access_granted';
+
+function checkPwd() {
+  var input = document.getElementById('pwdInput');
+  var err = document.getElementById('pwdErr');
+  if (input.value === ACCESS_PASSWORD) {
+    sessionStorage.setItem(PWD_KEY, '1');
+    var overlay = document.getElementById('pwdOverlay');
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity .3s';
+    setTimeout(function(){ overlay.style.display = 'none'; }, 300);
+    // 启动系统
+    init();
+  } else {
+    err.style.display = 'block';
+    input.value = '';
+    input.focus();
+  }
+}
+
+// 防止右键菜单
+document.addEventListener('contextmenu', function(e){ e.preventDefault(); return false; });
+// 防止 Ctrl+S / Ctrl+U / F12 / Ctrl+Shift+I
+document.addEventListener('keydown', function(e){
+  if ((e.ctrlKey || e.metaKey) && (e.key==='s' || e.key==='S' || e.key==='u' || e.key==='U')) { e.preventDefault(); return false; }
+  if (e.key==='F12') { e.preventDefault(); return false; }
+  if ((e.ctrlKey||e.metaKey) && e.shiftKey && (e.key==='I'||e.key==='i')) { e.preventDefault(); return false; }
+});
+// 禁用文本选择和拖拽
+document.addEventListener('selectstart', function(e){
+  if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.isContentEditable) e.preventDefault();
+});
+document.addEventListener('dragstart', function(e){ e.preventDefault(); return false; });
+
+// 页面加载时检查密码
+(function(){
+  // 自动聚焦密码输入框
+  setTimeout(function(){ document.getElementById('pwdInput').focus(); }, 100);
+})();
+
 // ============================================================
 // 数据加载
 // ============================================================
@@ -40957,10 +41041,10 @@ function renderDashboard() {
   const total = leadsData.length;
   const st = {};
   leadsData.forEach(r => { const s = r[11] || 'Raw'; st[s] = (st[s] || 0) + 1; });
-  const raw = st['Raw'] || 0;
   const mql = st['MQL'] || 0;
   const sql = (st['SQL']||0)+(st['商机推进']||0)+(st['报价与谈判']||0)+(st['成交签约']||0);
   const lost = st['流失/回收'] || 0;
+
   // 已跟进 = 跟进记录中有[销售反馈]内容的线索数
   const followedLeadIds = new Set();
   fupsData.forEach(r => {
@@ -40969,7 +41053,12 @@ function renderDashboard() {
     }
   });
   const followed = followedLeadIds.size;
-  const pending = total - followed - lost;
+
+  // 待跟进 = 跟进记录中阶段变化为待跟进/未联系上/未填写的数量
+  const pendingFups = fupsData.filter(r => {
+    const change = r[11] || '未填写';
+    return ['待跟进','未联系上','未填写'].includes(change);
+  }).length;
 
   // ===== 过滤同业公司/其它（仅用于分析图表，KPI保留全量） =====
   const filteredLeads = leadsData.filter(r => {
@@ -40977,32 +41066,27 @@ function renderDashboard() {
     return !ind.includes('同业') && !ind.includes('其它');
   });
   const filteredTotal = filteredLeads.length;
-  const filteredOut = total - filteredTotal;
+
+  // 线索编号 -> 线索数据 的查找表
+  const leadMap = {};
+  leadsData.forEach(r => { if (r[0]) leadMap[r[0].trim()] = r; });
+
+  // 过滤后的跟进记录（排除关联到同业公司的记录）
+  const filteredFups = fupsData.filter(r => {
+    const lid = r[1] ? r[1].trim() : '';
+    const lead = leadMap[lid];
+    if (!lead) return false;
+    const ind = lead[8] || '';
+    return !ind.includes('同业') && !ind.includes('其它');
+  });
 
   // ===== 跟进记录阶段变化全量分析 =====
   const changeMap = {};
-  const changeBySales = {};
-  const changeByStage = {}; // 阶段变化 × 线索当前阶段 交叉
   fupsData.forEach(r => {
     const change = r[11] || '未填写';
-    const lid = r[1] ? r[1].trim() : '';
-    const sales = r[13] || '';
-    const lead = leadsData.find(l => l[0] && l[0].trim() === lid);
-    const leadStage = lead ? (lead[11] || 'Raw') : '孤记录';
-
     changeMap[change] = (changeMap[change] || 0) + 1;
-
-    if (!changeBySales[sales]) changeBySales[sales] = {};
-    changeBySales[sales][change] = (changeBySales[sales][change] || 0) + 1;
-
-    if (!changeByStage[change]) changeByStage[change] = {};
-    changeByStage[change][leadStage] = (changeByStage[change][leadStage] || 0) + 1;
   });
-
   const sortedChange = Object.entries(changeMap).sort((a,b) => b[1] - a[1]);
-  const maxChange = Math.max(1, ...sortedChange.map(x => x[1]));
-  const allStages = ['Raw','MQL','SQL','商机推进','报价与谈判','成交签约','流失/回收'];
-  const topChanges = sortedChange.slice(0, 10).map(x => x[0]);
 
   // 跟进分类
   const changeCategories = {
@@ -41012,59 +41096,80 @@ function renderDashboard() {
     '无效/流失': ['无采购需求','非目标客户','无效数据','流失/回收-待评估']
   };
 
-  // Sales analysis
+  // ===== 各销售跟进效果分析（基于跟进记录数据） =====
   const salesMap = {};
-  leadsData.forEach(r => {
+  filteredFups.forEach(r => {
     const sales = r[13] || '未分配';
-    const stage = r[11] || 'Raw';
-    const lid = r[0] ? r[0].trim() : '';
-    const hasFeedback = followedLeadIds.has(lid);
-    if (!salesMap[sales]) salesMap[sales] = {tot:0,fol:0,unf:0,mql:0,sql:0,lost:0};
+    const change = r[11] || '未填写';
+    if (!salesMap[sales]) salesMap[sales] = {tot:0, pending:0, nurture:0, demand:0, invalid:0};
     salesMap[sales].tot++;
-    if (hasFeedback) salesMap[sales].fol++; else salesMap[sales].unf++;
-    if (stage==='MQL') salesMap[sales].mql++;
-    if (['SQL','商机推进','报价与谈判','成交签约'].includes(stage)) salesMap[sales].sql++;
-    if (stage==='流失/回收') salesMap[sales].lost++;
+    if (['待跟进','未联系上','未填写'].includes(change)) salesMap[sales].pending++;
+    else if (['继续沟通培养','待评估'].includes(change)) salesMap[sales].nurture++;
+    else if (change === '有采购需求') salesMap[sales].demand++;
+    else if (['无采购需求','非目标客户','无效数据','流失/回收-待评估'].includes(change)) salesMap[sales].invalid++;
   });
   const sortedSales = Object.entries(salesMap).sort((a,b)=>b[1].tot-a[1].tot);
 
-  // Region
+  // ===== 各大区跟进情况（基于跟进记录数据） =====
   const regMap = {};
-  leadsData.forEach(r => {
-    const reg = r[14] || '未分配';
-    const stage = r[11] || 'Raw';
-    const lid = r[0] ? r[0].trim() : '';
-    const hasFeedback = followedLeadIds.has(lid);
-    if (!regMap[reg]) regMap[reg] = {tot:0, fol:0, raw:0, mql:0, sql:0, lost:0};
+  filteredFups.forEach(r => {
+    const lid = r[1] ? r[1].trim() : '';
+    const lead = leadMap[lid];
+    const reg = lead ? (lead[14] || '未分配') : '未关联';
+    const change = r[11] || '未填写';
+    if (!regMap[reg]) regMap[reg] = {tot:0, done:0, pending:0};
     regMap[reg].tot++;
-    if (hasFeedback) regMap[reg].fol++; else regMap[reg].raw++;
-    if (stage==='MQL') regMap[reg].mql++;
-    if (['SQL','商机推进','报价与谈判','成交签约'].includes(stage)) regMap[reg].sql++;
-    if (stage==='流失/回收') regMap[reg].lost++;
+    if (['待跟进','未联系上','未填写'].includes(change)) regMap[reg].pending++;
+    else regMap[reg].done++;
   });
 
-  // Industry
+  // ===== 行业分布（线索池 + 跟进记录两份） =====
   const indMap = {};
   leadsData.forEach(r => { const ind = r[8] || '未知'; indMap[ind] = (indMap[ind] || 0) + 1; });
   const topInd = Object.entries(indMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
   const maxInd = Math.max(1,...topInd.map(x=>x[1]));
 
-  // Activity source
-  const actMap = {};
-  leadsData.forEach(r => {
+  const fupIndMap = {};
+  filteredFups.forEach(r => {
+    const lid = r[1] ? r[1].trim() : '';
+    const lead = leadMap[lid];
+    const ind = lead ? (lead[8] || '未知') : '未关联';
+    fupIndMap[ind] = (fupIndMap[ind] || 0) + 1;
+  });
+  const topFupInd = Object.entries(fupIndMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const maxFupInd = Math.max(1,...topFupInd.map(x=>x[1]));
+
+  // ===== 活动来源分析（线索池总数 + 跟进记录数据） =====
+  const actLeadsMap = {};
+  filteredLeads.forEach(r => {
     const act = r[2] || '未知';
     const stage = r[11] || 'Raw';
-    const lid = r[0] ? r[0].trim() : '';
-    const hasFeedback = followedLeadIds.has(lid);
-    if (!actMap[act]) actMap[act] = {tot:0,raw:0,fol:0,mql:0,sql:0,lost:0};
-    actMap[act].tot++;
-    if (hasFeedback) actMap[act].fol++; else actMap[act].raw++;
-    if (stage==='MQL') actMap[act].mql++;
-    if (['SQL','商机推进','报价与谈判','成交签约'].includes(stage)) actMap[act].sql++;
-    if (stage==='流失/回收') actMap[act].lost++;
+    if (!actLeadsMap[act]) actLeadsMap[act] = {leadTotal:0, mql:0, sql:0, lost:0};
+    actLeadsMap[act].leadTotal++;
+    if (stage==='MQL') actLeadsMap[act].mql++;
+    if (['SQL','商机推进','报价与谈判','成交签约'].includes(stage)) actLeadsMap[act].sql++;
+    if (stage==='流失/回收') actLeadsMap[act].lost++;
+  });
+  const actFupMap = {};
+  filteredFups.forEach(r => {
+    const lid = r[1] ? r[1].trim() : '';
+    const lead = leadMap[lid];
+    const act = lead ? (lead[2] || '未知') : '未关联';
+    const change = r[11] || '未填写';
+    if (!actFupMap[act]) actFupMap[act] = {fupTotal:0, pending:0, demand:0};
+    actFupMap[act].fupTotal++;
+    if (['待跟进','未联系上','未填写'].includes(change)) actFupMap[act].pending++;
+    if (change === '有采购需求') actFupMap[act].demand++;
+  });
+  const actAllKeys = new Set([...Object.keys(actLeadsMap), ...Object.keys(actFupMap)]);
+  const actMap = {};
+  actAllKeys.forEach(act => {
+    const al = actLeadsMap[act] || {leadTotal:0, mql:0, sql:0, lost:0};
+    const af = actFupMap[act] || {fupTotal:0, pending:0, demand:0};
+    actMap[act] = Object.assign({}, al, af);
   });
 
-  // Lost reasons from follow-ups
+  // ===== 流失原因细分（基于跟进记录数据） =====
   const lostLeadIds = new Set(leadsData.filter(r=>r[11]==='流失/回收').map(r=>r[0].trim()));
   const lostReasonMap = {};
   fupsData.forEach(r => {
@@ -41079,78 +41184,22 @@ function renderDashboard() {
   const maxReason = Math.max(1,...sortedReasons.map(x=>x[1].cnt));
 
   const flRate = total>0 ? (followed/total*100).toFixed(1) : '0';
-  const fbRate = total>0 ? (followed/total*100).toFixed(1) : '0';
   const stageNames = ['Raw','MQL','SQL','商机推进','报价与谈判','成交签约','流失/回收'];
   const stageColors = {
     'Raw':'#6B7280','MQL':'#3B82F6','SQL':'#8B5CF6',
     '商机推进':'#F59E0B','报价与谈判':'#10B981','成交签约':'#22C55E','流失/回收':'#EF4444'
   };
-  const maxSt = Math.max(1,...stageNames.map(s=>st[s]||0));
 
-  // ===== 过滤后的阶段分布 =====
+  // 过滤后的阶段分布
   const fst = {};
   filteredLeads.forEach(r => { const s = r[11] || 'Raw'; fst[s] = (fst[s] || 0) + 1; });
   const fmaxSt = Math.max(1,...stageNames.map(s=>fst[s]||0));
-
-  // ===== 过滤后的销售分析 =====
-  const fsalesMap = {};
-  filteredLeads.forEach(r => {
-    const sales = r[13] || '未分配';
-    const stage = r[11] || 'Raw';
-    const lid = r[0] ? r[0].trim() : '';
-    const hasFeedback = followedLeadIds.has(lid);
-    if (!fsalesMap[sales]) fsalesMap[sales] = {tot:0,fol:0,unf:0,mql:0,sql:0,lost:0};
-    fsalesMap[sales].tot++;
-    if (hasFeedback) fsalesMap[sales].fol++; else fsalesMap[sales].unf++;
-    if (stage==='MQL') fsalesMap[sales].mql++;
-    if (['SQL','商机推进','报价与谈判','成交签约'].includes(stage)) fsalesMap[sales].sql++;
-    if (stage==='流失/回收') fsalesMap[sales].lost++;
-  });
-  const fsortedSales = Object.entries(fsalesMap).sort((a,b)=>b[1].tot-a[1].tot);
-
-  // ===== 过滤后的大区分析 =====
-  const fregMap = {};
-  filteredLeads.forEach(r => {
-    const reg = r[14] || '未分配';
-    const stage = r[11] || 'Raw';
-    const lid = r[0] ? r[0].trim() : '';
-    const hasFeedback = followedLeadIds.has(lid);
-    if (!fregMap[reg]) fregMap[reg] = {tot:0, fol:0, raw:0, mql:0, sql:0, lost:0};
-    fregMap[reg].tot++;
-    if (hasFeedback) fregMap[reg].fol++; else fregMap[reg].raw++;
-    if (stage==='MQL') fregMap[reg].mql++;
-    if (['SQL','商机推进','报价与谈判','成交签约'].includes(stage)) fregMap[reg].sql++;
-    if (stage==='流失/回收') fregMap[reg].lost++;
-  });
-
-  // ===== 过滤后的活动来源分析 =====
-  const factMap = {};
-  filteredLeads.forEach(r => {
-    const act = r[2] || '未知';
-    const stage = r[11] || 'Raw';
-    const lid = r[0] ? r[0].trim() : '';
-    const hasFeedback = followedLeadIds.has(lid);
-    if (!factMap[act]) factMap[act] = {tot:0,raw:0,fol:0,mql:0,sql:0,lost:0};
-    factMap[act].tot++;
-    if (hasFeedback) factMap[act].fol++; else factMap[act].raw++;
-    if (stage==='MQL') factMap[act].mql++;
-    if (['SQL','商机推进','报价与谈判','成交签约'].includes(stage)) factMap[act].sql++;
-    if (stage==='流失/回收') factMap[act].lost++;
-  });
-
-  // 阶段变化颜色
-  const changeColors = {
-    '待跟进':'#6B7280','未填写':'#6B7280','未联系上':'#F59E0B',
-    '继续沟通培养':'#3B82F6','待评估':'#8B5CF6',
-    '有采购需求':'#22C55E','无采购需求':'#EF4444','非目标客户':'#EF4444',
-    '无效数据':'#DC2626','流失/回收-待评估':'#BA7517'
-  };
 
   const html = `
 <div class="kpi-row">
   <div class="kpi-card tot"><div class="val">${total}</div><div class="lbl">线索总数</div></div>
   <div class="kpi-card fol"><div class="val">${followed}</div><div class="lbl">销售已跟进</div><div class="sub">反馈覆盖率 ${flRate}%</div></div>
-  <div class="kpi-card raw"><div class="val">${pending}</div><div class="lbl">待跟进</div><div class="sub">占比 ${total>0?(pending/total*100).toFixed(1):0}%</div></div>
+  <div class="kpi-card raw"><div class="val">${pendingFups}</div><div class="lbl">待跟进</div><div class="sub">跟进记录中待处理</div></div>
   <div class="kpi-card mql"><div class="val">${mql}</div><div class="lbl">MQL</div><div class="sub">质量线索</div></div>
   <div class="kpi-card sq"><div class="val">${sql}</div><div class="lbl">SQL + 商机</div><div class="sub">MQL→SQL ${mql>0?(sql/mql*100).toFixed(1):0}%</div></div>
   <div class="kpi-card lst"><div class="val">${lost}</div><div class="lbl">流失/回收</div><div class="sub">流失率 ${total>0?(lost/total*100).toFixed(1):0}%</div></div>
@@ -41185,67 +41234,33 @@ function renderDashboard() {
     </table>
   </div>
 
-  <!-- ====== 阶段变化 × 线索阶段交叉分析 ====== -->
+  <!-- ====== 各销售跟进效果分析（基于跟进记录） ====== -->
   <div class="panel dash-full">
-    <div class="title">📊 阶段变化 × 线索当前阶段 交叉分析</div>
+    <div class="title">👤 各销售跟进效果分析 <span style="font-size:10px;color:var(--text3);font-weight:400">（基于跟进记录数据，已过滤同业公司${total-filteredTotal}条）</span></div>
     <table>
       <thead><tr>
-        <th>跟进阶段变化</th>
-        ${allStages.map(s => `<th style="font-size:10px;text-align:center">${s}</th>`).join('')}
-        <th>合计</th>
-      </tr></thead>
-      <tbody>
-        ${topChanges.map(change => {
-          const row = changeByStage[change] || {};
-          const rowTotal = changeMap[change];
-          return `<tr>
-            <td><b>${h(change)}</b></td>
-            ${allStages.map(stage => {
-              const v = row[stage] || 0;
-              return `<td style="text-align:center">${v > 0 ? `<span class="badge${v>3?' badge-mql':''}">${v}</span>` : '<span style="color:var(--text3)">—</span>'}</td>`;
-            }).join('')}
-            <td style="text-align:center"><b>${rowTotal}</b></td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-    <div style="font-size:10px;color:var(--text3);margin-top:6px">解读：阶段变化反映销售实际跟进结果，Raw阶段中"待跟进"为尚未人工接触的线索，"未联系上"为已尝试但未接通</div>
-  </div>
-
-  <!-- ====== 各销售阶段变化分析 ====== -->
-  <div class="panel dash-full">
-    <div class="title">👤 各销售跟进效果分析 <span style="font-size:10px;color:var(--text3);font-weight:400">（已过滤同业公司${total-filteredTotal}条）</span></div>
-    <table>
-      <thead><tr>
-        <th>销售</th><th>总线索</th><th>已跟进</th><th>跟进率</th>
+        <th>销售</th><th>跟进记录数</th><th>已处理</th><th>跟进率</th>
         <th>待跟进</th><th>继续沟通</th><th>明确需求</th><th>无效/流失</th>
-        <th>MQL</th><th>SQL+</th><th>流失率</th>
       </tr></thead>
       <tbody>
-        ${fsortedSales.map(([s, d]) => {
-          const fRate = d.tot>0 ? (d.fol/d.tot*100).toFixed(1) : 0;
-          const lRate = d.tot>0 ? (d.lost/d.tot*100).toFixed(1) : 0;
-          const cs = changeBySales[s] || {};
-          const pending = (cs['待跟进']||0) + (cs['未联系上']||0) + (cs['未填写']||0);
-          const nurture = (cs['继续沟通培养']||0) + (cs['待评估']||0);
-          const demand = cs['有采购需求']||0;
-          const invalid = (cs['无采购需求']||0) + (cs['非目标客户']||0) + (cs['无效数据']||0) + (cs['流失/回收-待评估']||0);
+        ${sortedSales.map(([s, d]) => {
+          const done = d.tot - d.pending;
+          const fRate = d.tot>0 ? (done/d.tot*100).toFixed(1) : 0;
           return `<tr>
             <td><b>${h(s)}</b></td><td>${d.tot}</td>
-            <td><span class="badge badge-sql">${d.fol}</span></td>
+            <td><span class="badge badge-sql">${done}</span></td>
             <td>${fRate}%</td>
-            <td><span class="badge badge-raw">${pending}</span></td>
-            <td><span class="badge badge-mql">${nurture}</span></td>
-            <td><span class="badge badge-won">${demand}</span></td>
-            <td><span class="badge badge-lost">${invalid}</span></td>
-            <td>${d.mql}</td><td>${d.sql}</td><td>${lRate}%</td>
+            <td><span class="badge badge-raw">${d.pending}</span></td>
+            <td><span class="badge badge-mql">${d.nurture}</span></td>
+            <td><span class="badge badge-won">${d.demand}</span></td>
+            <td><span class="badge badge-lost">${d.invalid}</span></td>
           </tr>`;
         }).join('')}
       </tbody>
     </table>
   </div>
 
-  <!-- ====== 流失原因细分 ====== -->
+  <!-- ====== 流失原因细分（基于跟进记录） ====== -->
   <div class="panel">
     <div class="title">🚫 流失/回收原因细分（${lost} 条流失线索，${lostReasonMap.size ? Object.values(lostReasonMap).reduce((s,x)=>s+x.cnt,0) : 0} 次标记）</div>
     <div class="bar-chart">
@@ -41262,21 +41277,18 @@ function renderDashboard() {
     ${sortedReasons.length === 0 ? '<p style="color:var(--text3);font-size:12px;text-align:center;padding:8px">暂无流失线索的跟进记录分析</p>' : ''}
   </div>
 
-  <!-- ====== 各大区跟进情况 ====== -->
+  <!-- ====== 各大区跟进情况（基于跟进记录） ====== -->
   <div class="panel">
-    <div class="title">🗺 各大区跟进情况 <span style="font-size:10px;color:var(--text3);font-weight:400">（已过滤同业公司${total-filteredTotal}条）</span></div>
+    <div class="title">🗺 各大区跟进情况 <span style="font-size:10px;color:var(--text3);font-weight:400">（基于跟进记录数据）</span></div>
     <table>
-      <thead><tr><th>大区</th><th>总数</th><th>已跟进</th><th>未跟进</th><th>MQL</th><th>SQL+</th><th>流失</th><th>跟进率</th></tr></thead>
+      <thead><tr><th>大区</th><th>跟进记录数</th><th>已处理</th><th>待跟进</th><th>跟进率</th></tr></thead>
       <tbody>
-        ${Object.entries(fregMap).sort((a,b)=>b[1].tot-a[1].tot).map(([r,d])=>{
-          const rate=d.tot>0?(d.fol/d.tot*100).toFixed(1):0;
+        ${Object.entries(regMap).sort((a,b)=>b[1].tot-a[1].tot).map(([r,d])=>{
+          const rate=d.tot>0?(d.done/d.tot*100).toFixed(1):0;
           return `<tr>
             <td><b>${h(r)}</b></td><td>${d.tot}</td>
-            <td><span class="badge badge-sql">${d.fol}</span></td>
-            <td><span class="badge badge-raw">${d.raw}</span></td>
-            <td><span class="badge badge-mql">${d.mql}</span></td>
-            <td><span class="badge badge-sql">${d.sql}</span></td>
-            <td><span class="badge badge-lost">${d.lost}</span></td>
+            <td><span class="badge badge-sql">${d.done}</span></td>
+            <td><span class="badge badge-raw">${d.pending}</span></td>
             <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${rate}%"></div></div>${rate}%</td>
           </tr>`;
         }).join('')}
@@ -41284,32 +41296,32 @@ function renderDashboard() {
     </table>
   </div>
 
-  <!-- ====== 活动来源分析 ====== -->
+  <!-- ====== 活动来源分析（线索池总数 + 跟进记录数据） ====== -->
   <div class="panel">
     <div class="title">📅 活动来源分析 <span style="font-size:10px;color:var(--text3);font-weight:400">（已过滤同业公司${total-filteredTotal}条）</span></div>
     <table>
-      <thead><tr><th>活动</th><th>总数</th><th>已跟进</th><th>待跟进</th><th>MQL</th><th>SQL+</th><th>流失</th><th>转化率</th></tr></thead>
+      <thead><tr><th>活动</th><th>线索池总数</th><th>跟进记录数</th><th>待跟进</th><th>MQL</th><th>SQL+</th><th>流失</th><th>转化率</th></tr></thead>
       <tbody>
-        ${Object.entries(factMap).sort((a,b)=>b[1].tot-a[1].tot).map(([a,d])=>{
-          const rate=d.tot>0?((d.mql+d.sql)/d.tot*100).toFixed(1):0;
-          const folRate=d.tot>0?(d.fol/d.tot*100).toFixed(1):0;
+        ${Object.entries(actMap).sort((a,b)=>b[1].leadTotal-a[1].leadTotal).map(([a,d])=>{
+          const convRate=d.fupTotal>0?(d.demand/d.fupTotal*100).toFixed(1):0;
           return `<tr>
-            <td><b>${h(a)}</b></td><td>${d.tot}</td>
-            <td><span class="badge badge-sql">${d.fol}</span> (${folRate}%)</td>
-            <td><span class="badge badge-raw">${d.raw}</span></td>
+            <td><b>${h(a)}</b></td><td>${d.leadTotal}</td>
+            <td>${d.fupTotal}</td>
+            <td><span class="badge badge-raw">${d.pending}</span></td>
             <td><span class="badge badge-mql">${d.mql}</span></td>
             <td><span class="badge badge-sql">${d.sql}</span></td>
             <td><span class="badge badge-lost">${d.lost}</span></td>
-            <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${rate}%"></div></div>${rate}%</td>
+            <td><div class="mini-bar"><div class="mini-bar-fill" style="width:${convRate}%"></div></div>${convRate}%</td>
           </tr>`;
         }).join('')}
       </tbody>
     </table>
+    <div style="font-size:10px;color:var(--text3);margin-top:6px">转化率 = 跟进记录中有采购需求 / 跟进记录总数</div>
   </div>
 
-  <!-- ====== 行业分布 ====== -->
+  <!-- ====== 行业分布（线索池总表） ====== -->
   <div class="panel">
-    <div class="title">🏭 行业分布 TOP 10</div>
+    <div class="title">🏭 行业分布 TOP 10 <span style="font-size:10px;color:var(--text3);font-weight:400">（线索池总表）</span></div>
     <div class="bar-chart">
       ${topInd.map(([ind,cnt])=>{
         const p=maxInd>0?cnt/maxInd*100:0;
@@ -41320,6 +41332,22 @@ function renderDashboard() {
         </div>`;
       }).join('')}
     </div>
+  </div>
+
+  <!-- ====== 行业分布（跟进记录） ====== -->
+  <div class="panel">
+    <div class="title">🏭 行业分布 TOP 10 <span style="font-size:10px;color:var(--text3);font-weight:400">（跟进记录，共${filteredFups.length}条）</span></div>
+    <div class="bar-chart">
+      ${topFupInd.map(([ind,cnt])=>{
+        const p=maxFupInd>0?cnt/maxFupInd*100:0;
+        return `<div class="bar-row">
+          <span class="bar-label" style="width:110px">${h(ind.length>13?ind.substr(0,12)+'…':ind)}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:var(--green)"></div></div>
+          <span class="bar-val">${cnt}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    ${topFupInd.length === 0 ? '<p style="color:var(--text3);font-size:12px;text-align:center;padding:8px">暂无跟进记录行业数据</p>' : ''}
   </div>
 
   <!-- ====== 全部线索阶段分布 ====== -->
@@ -41337,7 +41365,7 @@ function renderDashboard() {
     </div>
   </div>
 </div>
-<div class="footer">数据实时保存 · 销售已跟进=${followed}条 · 待跟进=${pending}条 · 流失=${lost}条 · 跟进记录=${fupsData.length}条 · 最近刷新：${new Date().toLocaleTimeString('zh-CN')}</div>`;
+<div class="footer">数据实时保存 · 销售已跟进=${followed}条 · 待跟进(记录)=${pendingFups}条 · 流失=${lost}条 · 跟进记录=${fupsData.length}条 · 最近刷新：${new Date().toLocaleTimeString('zh-CN')}</div>`;
   document.getElementById('mainContent').innerHTML = html;
 }
 
@@ -41418,6 +41446,18 @@ function renderLeads() {
     for (let ci = LEADS_SYSTEM_COLS; ci < LEADS_HEADERS.length; ci++) {
       tds += `<td class="editable" data-col="${ci}">${h(r[ci]||'')}</td>`;
     }
+    // Action button
+    const score = parseInt(r[12]) || 0;
+    const hasFup = fupsData.some(f => f[1] && f[1].trim() === (r[0]||'').trim());
+    tds += `<td style="white-space:nowrap;text-align:center">`;
+    if (score >= 60 && !hasFup) {
+      tds += `<button class="small" style="background:var(--mql);color:#fff;font-size:10px;padding:2px 6px" onclick="event.stopPropagation();addToFollowup(${origIdx})" title="MQL评分≥60，点击添加到跟进记录">+ 跟进</button>`;
+    } else if (!hasFup) {
+      tds += `<button class="small" style="font-size:10px;padding:2px 6px" onclick="event.stopPropagation();addToFollowup(${origIdx})" title="手动添加到跟进记录">+ 跟进</button>`;
+    } else {
+      tds += `<span style="font-size:10px;color:var(--text3)">已跟进</span>`;
+    }
+    tds += `</td>`;
     tds += `</tr>`;
     return tds;
   }).join('');
@@ -41427,16 +41467,17 @@ function renderLeads() {
     const delBtn = i >= LEADS_SYSTEM_COLS
       ? `<span class="col-del" onclick="event.stopPropagation();removeColumn('leads',${i})" title="删除此列">✕</span>` : '';
     return `<th>${h(hd)}${delBtn}</th>`;
-  }).join('');
+  }).join('') + '<th style="width:70px;text-align:center">操作</th>';
 
   const html = filterHtml + `
 <div class="filter-row">
   <button class="small" onclick="addColumn('leads')" title="指定位置添加新列">+ 添加列</button>
+  <button class="small" style="background:var(--mql);color:#fff" onclick="autoAssignMQL()" title="将MQL评分≥60且无跟进记录的线索自动添加到跟进记录">⚡ MQL≥60自动分配</button>
   <span style="font-size:11px;color:var(--text3)">共 ${LEADS_HEADERS.length} 列（系统 ${LEADS_SYSTEM_COLS} + 自定义 ${LEADS_HEADERS.length - LEADS_SYSTEM_COLS}）</span>
 </div>
 <div class="table-wrap">
   <table>
-    <colgroup>${LEADS_HEADERS.map((_,i)=>`<col>`).join('')}</colgroup>
+    <colgroup>${LEADS_HEADERS.map((_,i)=>`<col>`).join('')}<col style="width:70px"></colgroup>
     <thead><tr>${headerHtml}</tr></thead>
     <tbody>${rows}</tbody>
   </table>
@@ -42097,6 +42138,71 @@ function submitNewLead() {
 }
 
 // ============================================================
+// MQL≥60 自动分配到跟进记录 + 手动添加
+// ============================================================
+
+// 创建一条跟进记录（内部辅助函数）
+function createFollowupRow(lead) {
+  const now = new Date();
+  const dateStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  const fupNum = String(fupsData.length + 1).padStart(4, '0');
+  return [
+    'FUP-2026-'+fupNum,                    // 0: 跟进编号
+    lead[0] || '',                         // 1: 线索编号
+    dateStr,                               // 2: 跟进日期
+    '', '', '', '', '', '', '', '',        // 3-11: 空
+    '',                                    // 12: 下一步计划
+    lead[13] || '',                        // 13: 负责人（从线索池同步）
+    ''                                     // 14: 操作
+  ];
+}
+
+// 手动将指定线索添加到跟进记录
+function addToFollowup(rowIdx) {
+  const lead = leadsData[rowIdx];
+  if (!lead || !lead[0]) { toast('该线索没有线索编号，无法添加', 'err'); return; }
+  const leadId = lead[0].trim();
+  const existCount = fupsData.filter(r => r[1] && r[1].trim() === leadId).length;
+  if (existCount > 0) {
+    toast('线索 ' + leadId + ' 已有 ' + existCount + ' 条跟进记录', 'warn');
+    return;
+  }
+  const newRow = createFollowupRow(lead);
+  fupsData.push(newRow);
+  saveData();
+  syncToServer();
+  toast('已添加线索 ' + leadId + ' 到跟进记录', 'info');
+  renderLeads();
+}
+
+// MQL≥60 自动分配：扫描所有线索，将评分≥60且无跟进记录的自动添加
+function autoAssignMQL() {
+  const candidates = leadsData.filter(r => {
+    const score = parseInt(r[12]) || 0;
+    const leadId = (r[0] || '').trim();
+    if (score < 60) return false;
+    if (!leadId) return false;
+    const hasFup = fupsData.some(f => f[1] && f[1].trim() === leadId);
+    return !hasFup;
+  });
+  if (candidates.length === 0) {
+    toast('没有符合条件的线索（MQL≥60且无跟进记录）', 'info');
+    return;
+  }
+  if (!confirm('发现 ' + candidates.length + ' 条 MQL评分≥60 且无跟进记录的线索，是否全部添加到跟进记录？')) return;
+  let added = 0;
+  candidates.forEach(lead => {
+    const newRow = createFollowupRow(lead);
+    fupsData.push(newRow);
+    added++;
+  });
+  saveData();
+  syncToServer();
+  toast('已自动分配 ' + added + ' 条线索到跟进记录', 'info');
+  renderLeads();
+}
+
+// ============================================================
 // 新增跟进记录
 // ============================================================
 function addFollowup() {
@@ -42163,24 +42269,11 @@ function deleteFupRow(rowIdx) {
 }
 
 // ============================================================
-// 导出 CSV
+// 导出功能已禁用（数据保护）
 // ============================================================
 function exportCSV() {
-  function csvLine(arr) { return arr.map(v => '"'+(v||'').replace(/"/g,'""')+'"').join(','); }
-  const lines = [];
-  lines.push(csvLine(LEADS_HEADERS));
-  leadsData.forEach(r => lines.push(csvLine(r)));
-  lines.push('');
-  lines.push(csvLine(FUP_HEADERS));
-  fupsData.forEach(r => lines.push(csvLine(r)));
-  
-  const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `科诺美_线索跟进_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast('CSV 已导出', 'info');
+  toast('数据导出功能已被管理员禁用', 'err');
+  return false;
 }
 
 // ============================================================
@@ -42212,7 +42305,15 @@ function init() {
   }).catch(function() { serverSyncing = false; });
 }
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', function() {
+  // 如果本会话已验证过密码，直接进入系统
+  if (sessionStorage.getItem(PWD_KEY) === '1') {
+    var overlay = document.getElementById('pwdOverlay');
+    if (overlay) overlay.style.display = 'none';
+    init();
+  }
+  // 否则等待用户输入密码，checkPwd() 中调用 init()
+});
 
 // Global click handler to finish edit
 document.addEventListener('click', function(e) {
