@@ -413,7 +413,7 @@ const BUDGET_CONFIRM = ['已确认','待确认','未提及'];
 const STAGE_CHANGE = ['待跟进','有采购需求','无采购需求','非目标客户','无效数据','继续沟通培养','未联系上','待评估','未知'];
 const SALES_LIST = ["刘力瑞", "汤显义", "王泽", "王远帅", "穆忠仁", "管能", "胡雨来", "高丹枫", "高雷", "黄江锐", "刘健凯"];
 const ACTIVITY_LIST = ['CPHI2026','川检会','二维制备','质检会-杭州站','质检会-广州站','检验检测机构实验室质控培训_成都站','全国生物医药色谱质谱交流会','天津大学第二十六届仪器设备展示会','第七届亚洲药剂论坛','2026年昌平生命科学论坛','2026年质检培训会-广州站','青岛海博会','官网咨询','转介绍','招投标','电话咨询'];
-const SOURCE_OPTIONS = ['展会','直播','官网咨询','转介绍','招投标','电话咨询','邮件','其他'];
+const SOURCE_OPTIONS = ['展会','直播','线上推广','官网咨询','转介绍','招投标','电话咨询','邮件','其他'];
 const SCALE_OPTIONS = ['未知','50人以下','50-100人','100-500人','500-1000人','1000人以上'];
 
 let leadsData = [], fupsData = [];
@@ -40890,6 +40890,7 @@ function jumpToLeadByIdx(idx) {
   leadFilterId = leadId;
   leadFilterStage = '';
   leadFilterSales = '';
+  leadFilterSource = ''; leadFilterRegion = ''; leadFilterScale = ''; leadFilterKeyword = '';
   switchTab('leads');
   toast('已跳转到线索：' + leadId, 'info');
   // 滚动到目标行并高亮
@@ -41341,23 +41342,52 @@ function renderDashboard() {
 }
 
 // ---- 线索池总表 ----
-let leadFilterStage = '', leadFilterSales = '', leadFilterId = '';
+let leadFilterStage = '', leadFilterSales = '', leadFilterId = '', leadFilterSource = '', leadFilterRegion = '', leadFilterScale = '', leadFilterKeyword = '';
+
+function clearLeadFilters() {
+  leadFilterStage = ''; leadFilterSales = ''; leadFilterId = '';
+  leadFilterSource = ''; leadFilterRegion = ''; leadFilterScale = ''; leadFilterKeyword = '';
+  renderLeads();
+}
 
 function renderLeads() {
   let filtered = leadsData;
   if (leadFilterStage) filtered = filtered.filter(r => (r[11]||'Raw') === leadFilterStage);
   if (leadFilterSales) filtered = filtered.filter(r => r[13] === leadFilterSales);
+  if (leadFilterSource) filtered = filtered.filter(r => r[1] === leadFilterSource);
+  if (leadFilterScale) filtered = filtered.filter(r => (r[10]||'') === leadFilterScale);
   if (leadFilterId) filtered = filtered.filter(r => r[0] && r[0].toLowerCase().includes(leadFilterId.toLowerCase()));
-  
+  if (leadFilterRegion) filtered = filtered.filter(r => r[9] && r[9].includes(leadFilterRegion));
+  if (leadFilterKeyword) {
+    const kw = leadFilterKeyword.toLowerCase();
+    filtered = filtered.filter(r => {
+      const fields = [r[2],r[3],r[4],r[5],r[8],r[16]].join(' ').toLowerCase();
+      return fields.includes(kw);
+    });
+  }
+  // Build region list from data
+  const regionSet = new Set();
+  leadsData.forEach(r => { if (r[9]) regionSet.add(r[9]); });
+  const regionList = [...regionSet].sort();
+
   const filterHtml = `
 <div class="filter-row">
+  <label>来源：</label><select onchange="leadFilterSource=this.value;renderLeads()">
+    <option value="">全部</option>${SOURCE_OPTIONS.map(s=>`<option value="${s}" ${leadFilterSource===s?'selected':''}>${s}</option>`).join('')}
+  </select>
   <label>阶段：</label><select onchange="leadFilterStage=this.value;renderLeads()">
     <option value="">全部</option>${STAGE_OPTIONS.map(s=>`<option value="${s}" ${leadFilterStage===s?'selected':''}>${s}</option>`).join('')}
   </select>
   <label>销售：</label><select onchange="leadFilterSales=this.value;renderLeads()">
     <option value="">全部</option>${SALES_LIST.map(s=>`<option value="${s}" ${leadFilterSales===s?'selected':''}>${s}</option>`).join('')}
   </select>
-  <label>检索编号：</label><input value="${h(leadFilterId)}" oninput="leadFilterId=this.value;renderLeads()" placeholder="输入线索编号" style="width:140px">
+  <label>规模：</label><select onchange="leadFilterScale=this.value;renderLeads()">
+    <option value="">全部</option>${SCALE_OPTIONS.map(s=>`<option value="${s}" ${leadFilterScale===s?'selected':''}>${s}</option>`).join('')}
+  </select>
+  <label>地域：</label><input value="${h(leadFilterRegion)}" oninput="leadFilterRegion=this.value;renderLeads()" placeholder="输入地域" style="width:100px" list="regionFilterList"><datalist id="regionFilterList">${regionList.map(r=>`<option value="${h(r)}">`).join('')}</datalist>
+  <label>编号：</label><input value="${h(leadFilterId)}" oninput="leadFilterId=this.value;renderLeads()" placeholder="线索编号" style="width:120px">
+  <label>关键词：</label><input value="${h(leadFilterKeyword)}" oninput="leadFilterKeyword=this.value;renderLeads()" placeholder="客户/联系人/活动/备注" style="width:160px">
+  <button class="small" onclick="clearLeadFilters()" title="清除所有筛选">重置</button>
   <span style="font-size:11px;color:var(--text3)">显示 ${filtered.length} / ${leadsData.length} 条</span>
 </div>`;
 
@@ -41401,7 +41431,7 @@ function renderLeads() {
 
   const html = filterHtml + `
 <div class="filter-row">
-  <button class="small" onclick="addColumn('leads')" title="在末尾添加新列">+ 添加列</button>
+  <button class="small" onclick="addColumn('leads')" title="指定位置添加新列">+ 添加列</button>
   <span style="font-size:11px;color:var(--text3)">共 ${LEADS_HEADERS.length} 列（系统 ${LEADS_SYSTEM_COLS} + 自定义 ${LEADS_HEADERS.length - LEADS_SYSTEM_COLS}）</span>
 </div>
 <div class="table-wrap">
@@ -41417,7 +41447,12 @@ function renderLeads() {
 }
 
 // ---- 跟进记录 ----
-let fupFilterLead = '', fupFilterSales = '';
+let fupFilterLead = '', fupFilterSales = '', fupFilterMethod = '', fupFilterStageChange = '', fupFilterContent = '';
+
+function clearFupFilters() {
+  fupFilterLead = ''; fupFilterSales = ''; fupFilterMethod = ''; fupFilterStageChange = ''; fupFilterContent = '';
+  renderFollowups();
+}
 
 function renderFollowups() {
   let filtered = fupsData;
@@ -41427,13 +41462,30 @@ function renderFollowups() {
 
   if (fupFilterLead) filtered = filtered.filter(r => r[1] && r[1].toLowerCase().includes(fupFilterLead.toLowerCase()));
   if (fupFilterSales) filtered = filtered.filter(r => r[13] === fupFilterSales);
+  if (fupFilterMethod) filtered = filtered.filter(r => r[3] === fupFilterMethod);
+  if (fupFilterStageChange) filtered = filtered.filter(r => (r[11]||'') === fupFilterStageChange);
+  if (fupFilterContent) {
+    const kw = fupFilterContent.toLowerCase();
+    filtered = filtered.filter(r => {
+      const fields = [r[4],r[6],r[9],r[12]].join(' ').toLowerCase();
+      return fields.includes(kw);
+    });
+  }
 
   const filterHtml = `
 <div class="filter-row">
-  <label>线索编号：</label><input value="${h(fupFilterLead)}" oninput="fupFilterLead=this.value;renderFollowups()" placeholder="检索线索编号" style="width:140px">
+  <label>线索编号：</label><input value="${h(fupFilterLead)}" oninput="fupFilterLead=this.value;renderFollowups()" placeholder="检索线索编号" style="width:120px">
   <label>负责人：</label><select onchange="fupFilterSales=this.value;renderFollowups()">
     <option value="">全部</option>${fupSalesList.map(s=>`<option value="${s}" ${fupFilterSales===s?'selected':''}>${s}</option>`).join('')}
   </select>
+  <label>方式：</label><select onchange="fupFilterMethod=this.value;renderFollowups()">
+    <option value="">全部</option>${METHOD_OPTIONS.map(s=>`<option value="${s}" ${fupFilterMethod===s?'selected':''}>${s}</option>`).join('')}
+  </select>
+  <label>阶段变化：</label><select onchange="fupFilterStageChange=this.value;renderFollowups()">
+    <option value="">全部</option>${STAGE_CHANGE.map(s=>`<option value="${s}" ${fupFilterStageChange===s?'selected':''}>${s}</option>`).join('')}
+  </select>
+  <label>内容检索：</label><input value="${h(fupFilterContent)}" oninput="fupFilterContent=this.value;renderFollowups()" placeholder="跟进内容/产品/金额/计划" style="width:160px">
+  <button class="small" onclick="clearFupFilters()" title="清除所有筛选">重置</button>
   <span style="font-size:11px;color:var(--text3)">显示 ${filtered.length} / ${fupsData.length} 条</span>
 </div>`;
 
@@ -41472,7 +41524,7 @@ function renderFollowups() {
 
   const html = filterHtml + `
 <div class="filter-row">
-  <button class="small" onclick="addColumn('followups')" title="在末尾添加新列">+ 添加列</button>
+  <button class="small" onclick="addColumn('followups')" title="指定位置添加新列">+ 添加列</button>
   <span style="font-size:11px;color:var(--text3)">共 ${FUP_HEADERS.length} 列（系统 ${FUP_SYSTEM_COLS} + 自定义 ${FUP_HEADERS.length - FUP_SYSTEM_COLS}）</span>
 </div>
 <div class="table-wrap">
@@ -41630,18 +41682,58 @@ function collectMQLEdits() {
 // 列管理（增减列 / 删减列）
 // ============================================================
 function addColumn(tab) {
-  const name = prompt('请输入新列名称：');
-  if (!name || !name.trim()) return;
-  if (tab === 'leads') {
-    LEADS_HEADERS.push(name.trim());
-    leadsData.forEach(r => { while (r.length < LEADS_HEADERS.length) r.push(''); });
+  const headers = tab === 'leads' ? LEADS_HEADERS : FUP_HEADERS;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'addColumnModal';
+  // Build position options: after each existing column
+  const posOptions = headers.map((hd, i) => `<option value="after_${i}">在「${h(hd)}」之后</option>`).join('') +
+    `<option value="before_0">在「${h(headers[0])}」之前（最前）</option>`;
+  modal.innerHTML = `<div class="modal-box" style="width:420px">
+    <h3>添加新列${tab === 'leads' ? '（线索池总表）' : '（跟进记录）'}</h3>
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-field full"><label>列名称 *</label><input id="ac_name" placeholder="请输入新列名称" autofocus></div>
+      <div class="form-field full"><label>插入位置</label><select id="ac_pos">${posOptions}</select></div>
+    </div>
+    <div class="form-actions">
+      <button onclick="closeAddColumnModal()">取消</button>
+      <button class="primary" onclick="confirmAddColumn('${tab}')">确认添加</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeAddColumnModal(); });
+  setTimeout(() => { const el = document.getElementById('ac_name'); if(el) el.focus(); }, 100);
+}
+
+function closeAddColumnModal() {
+  const modal = document.getElementById('addColumnModal');
+  if (modal) modal.remove();
+}
+
+function confirmAddColumn(tab) {
+  const name = document.getElementById('ac_name').value.trim();
+  if (!name) { toast('请输入列名称', 'warn'); return; }
+  const posVal = document.getElementById('ac_pos').value;
+  const parts = posVal.split('_');
+  const mode = parts[0]; // 'after' or 'before'
+  const refIdx = parseInt(parts[1]);
+  let insertIdx;
+  if (mode === 'after') {
+    insertIdx = refIdx + 1;
   } else {
-    FUP_HEADERS.push(name.trim());
-    fupsData.forEach(r => { while (r.length < FUP_HEADERS.length) r.push(''); });
+    insertIdx = 0;
   }
+  if (tab === 'leads') {
+    LEADS_HEADERS.splice(insertIdx, 0, name);
+    leadsData.forEach(r => { r.splice(insertIdx, 0, ''); });
+  } else {
+    FUP_HEADERS.splice(insertIdx, 0, name);
+    fupsData.forEach(r => { r.splice(insertIdx, 0, ''); });
+  }
+  closeAddColumnModal();
   markDirty();
   render();
-  toast('已添加列「' + name.trim() + '」，请点击保存', 'info');
+  toast('已在指定位置添加列「' + name + '」，请点击保存', 'info');
 }
 
 function removeColumn(tab, colIdx) {
@@ -41913,7 +42005,7 @@ function showAddLeadForm() {
     <h3>新增线索</h3>
     <div class="form-grid">
       <div class="form-field"><label>线索编号（自动生成）</label><input id="al_id" value="${newId}" disabled style="opacity:.6"></div>
-      <div class="form-field"><label>线索来源 *</label><select id="al_source">${['展会','直播','官网咨询','转介绍','招投标','电话咨询','邮件','其他'].map(s=>`<option value="${s}">${s}</option>`).join('')}</select></div>
+      <div class="form-field"><label>线索来源 *</label><select id="al_source">${['展会','直播','线上推广','官网咨询','转介绍','招投标','电话咨询','邮件','其他'].map(s=>`<option value="${s}">${s}</option>`).join('')}</select></div>
       <div class="form-field"><label>活动名称</label><select id="al_activity"><option value="">未关联活动</option>${ACTIVITY_LIST.map(s=>`<option value="${s}">${s}</option>`).join('')}</select></div>
       <div class="form-field"><label>客户名称 *</label><input id="al_cname" placeholder="请输入客户名称"></div>
       <div class="form-field"><label>联系人</label><input id="al_contact" placeholder="联系人姓名"></div>
@@ -42193,6 +42285,8 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     var modal = document.getElementById('addLeadModal');
     if (modal) { closeAddLeadModal(); return; }
+    var colModal = document.getElementById('addColumnModal');
+    if (colModal) { closeAddColumnModal(); return; }
     if (selRange) { clearRangeSelection(); toast('已取消选区', 'info'); return; }
   }
 
