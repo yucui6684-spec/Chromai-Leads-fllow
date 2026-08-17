@@ -310,6 +310,7 @@ th .col-del:hover{opacity:1}
     <button onclick="manualSave()" class="primary" id="btnSave" title="保存所有修改到本地">💾 保存</button>
     <button onclick="showAddLeadForm()" title="在线索池中新增一条线索">+ 新增线索</button>
     <button onclick="addFollowup()" class="primary" title="为当前线索新增跟进记录">+ 新增跟进</button>
+    <button onclick="showImportModal()" style="background:var(--purple);color:#fff" title="从CSV/Excel文件或粘贴数据导入">📥 导入数据</button>
   </div>
 </header>
 
@@ -42298,6 +42299,276 @@ function deleteLeadRow(rowIdx) {
 function exportCSV() {
   toast('数据导出功能已被管理员禁用', 'err');
   return false;
+}
+
+// ============================================================
+// 导入数据功能
+// ============================================================
+var _importState = { target: 'leads', headers: [], rows: [], mapping: [] };
+
+function showImportModal() {
+  var existing = document.getElementById('importModal');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'importModal';
+  modal.innerHTML = '<div class="modal-box" style="width:720px;max-height:90vh">'
+    + '<h3>📥 导入数据</h3>'
+    + '<div style="margin-bottom:14px">'
+    + '  <div class="form-field" style="margin-bottom:10px">'
+    + '    <label>导入到</label>'
+    + '    <select id="imp_target" onchange="_importState.target=this.value;_updateImportPreview()">'
+    + '      <option value="leads">线索池总表</option>'
+    + '      <option value="followups">跟进记录</option>'
+    + '    </select>'
+    + '  </div>'
+    + '  <div class="form-field" style="margin-bottom:10px">'
+    + '    <label>上传文件（CSV / Excel .xlsx）</label>'
+    + '    <input type="file" id="imp_file" accept=".csv,.txt,.xlsx,.xls" onchange="handleImportFile(this)" style="font-size:12px">'
+    + '  </div>'
+    + '  <div style="text-align:center;color:var(--text3);font-size:11px;margin:6px 0">— 或粘贴数据 —</div>'
+    + '  <div class="form-field">'
+    + '    <label>粘贴表格数据（从Excel复制后Ctrl+V，首行为表头）</label>'
+    + '    <textarea id="imp_paste" rows="5" placeholder="线索编号\\t线索来源\\t活动名称\\t客户名称(脱敏)\\t...\\nLD-2026-001\\t展会\\tCPHI2026\\tXX公司\\t..." style="width:100%;font-family:monospace;font-size:11px" oninput="handleImportPaste(this.value)"></textarea>'
+    + '  </div>'
+    + '</div>'
+    + '<div id="imp_preview" style="display:none">'
+    + '  <div style="border:1px solid var(--border);border-radius:6px;max-height:280px;overflow:auto;margin-bottom:12px">'
+    + '    <table id="imp_preview_table" style="width:100%;font-size:11px;border-collapse:collapse"></table>'
+    + '  </div>'
+    + '  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    + '    <span id="imp_stats" style="font-size:12px;color:var(--text2)"></span>'
+    + '    <select id="imp_mode" style="font-size:12px">'
+    + '      <option value="append">追加（保留现有数据）</option>'
+    + '      <option value="replace">替换（清空后导入）</option>'
+    + '    </select>'
+    + '  </div>'
+    + '</div>'
+    + '<div class="form-actions">'
+    + '  <button onclick="closeImportModal()">取消</button>'
+    + '  <button class="primary" id="imp_confirm" onclick="confirmImport()" style="background:var(--purple)" disabled>确认导入</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeImportModal(); });
+}
+
+function closeImportModal() {
+  var modal = document.getElementById('importModal');
+  if (modal) modal.remove();
+  _importState = { target: 'leads', headers: [], rows: [], mapping: [] };
+}
+
+// CSV 解析器（支持引号、逗号、换行）
+function _parseCSV(text, delimiter) {
+  if (!delimiter) {
+    var tCount = (text.split('\n')[0] || '').split('\t').length;
+    var cCount = (text.split('\n')[0] || '').split(',').length;
+    delimiter = tCount > cCount ? '\t' : ',';
+  }
+  var rows = [];
+  var row = [];
+  var field = '';
+  var inQuotes = false;
+  for (var i = 0; i < text.length; i++) {
+    var ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i+1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === delimiter) { row.push(field); field = ''; }
+      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (ch === '\r') { /* skip */ }
+      else field += ch;
+    }
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(function(r) { return r.some(function(c) { return c && c.trim(); }); });
+}
+
+// 处理文件上传
+function handleImportFile(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var name = file.name.toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    // Excel — 动态加载 SheetJS
+    if (typeof XLSX === 'undefined') {
+      var scr = document.createElement('script');
+      scr.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+      scr.onload = function() { _readExcel(file); };
+      scr.onerror = function() { toast('无法加载Excel解析库，请改用CSV格式上传', 'err'); };
+      document.head.appendChild(scr);
+    } else {
+      _readExcel(file);
+    }
+  } else {
+    // CSV / TXT
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var text = e.target.result;
+      // BOM 处理
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      var parsed = _parseCSV(text);
+      _processImportedData(parsed);
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+}
+
+function _readExcel(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var wb = XLSX.read(data, { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var parsed = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      _processImportedData(parsed);
+    } catch(err) {
+      toast('Excel解析失败: ' + err.message, 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// 处理粘贴
+function handleImportPaste(text) {
+  if (!text || !text.trim()) {
+    document.getElementById('imp_preview').style.display = 'none';
+    document.getElementById('imp_confirm').disabled = true;
+    return;
+  }
+  var parsed = _parseCSV(text);
+  _processImportedData(parsed);
+}
+
+// 处理解析后的数据
+function _processImportedData(parsed) {
+  if (!parsed || parsed.length < 2) {
+    toast('数据不足：至少需要表头行 + 1行数据', 'warn');
+    document.getElementById('imp_preview').style.display = 'none';
+    document.getElementById('imp_confirm').disabled = true;
+    return;
+  }
+  var importHeaders = parsed[0].map(function(s) { return String(s || '').trim(); });
+  var importRows = parsed.slice(1).map(function(r) {
+    var row = [];
+    for (var i = 0; i < importHeaders.length; i++) row.push(r[i] != null ? String(r[i]) : '');
+    return row;
+  });
+
+  var targetHeaders = _importState.target === 'leads' ? LEADS_HEADERS : FUP_HEADERS;
+
+  // 自动映射：按列名匹配
+  var mapping = importHeaders.map(function(ih) {
+    var idx = targetHeaders.findIndex(function(th) { return th === ih || th.replace(/\(.*\)/,'').trim() === ih.replace(/\(.*\)/,'').trim(); });
+    return idx >= 0 ? idx : -1;
+  });
+
+  _importState.headers = importHeaders;
+  _importState.rows = importRows;
+  _importState.mapping = mapping;
+
+  _updateImportPreview();
+}
+
+function _updateImportPreview() {
+  if (_importState.target) {
+    var targetHeaders = _importState.target === 'leads' ? LEADS_HEADERS : FUP_HEADERS;
+    // 重新映射
+    _importState.mapping = _importState.headers.map(function(ih) {
+      var idx = targetHeaders.findIndex(function(th) { return th === ih || th.replace(/\(.*\)/,'').trim() === ih.replace(/\(.*\)/,'').trim(); });
+      return idx >= 0 ? idx : -1;
+    });
+  }
+  if (!_importState.rows.length) return;
+
+  var targetHeaders = _importState.target === 'leads' ? LEADS_HEADERS : FUP_HEADERS;
+  var mappedCount = _importState.mapping.filter(function(m) { return m >= 0; }).length;
+  var unmapped = _importState.headers.filter(function(ih, i) { return _importState.mapping[i] < 0; });
+
+  // 构建预览表格
+  var previewRows = _importState.rows.slice(0, 5);
+  var html = '<thead><tr style="background:var(--th-bg)">';
+  html += '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid var(--border)">导入列</th>';
+  html += '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid var(--border)">→ 映射到</th>';
+  html += '</tr></thead><tbody>';
+  _importState.headers.forEach(function(ih, i) {
+    var mapped = _importState.mapping[i] >= 0 ? targetHeaders[_importState.mapping[i]] : '';
+    var color = mapped ? 'var(--green)' : 'var(--text3)';
+    var bg = mapped ? '' : 'background:rgba(239,68,68,.05)';
+    html += '<tr style="' + bg + '">'
+      + '<td style="padding:3px 6px;border-bottom:1px solid var(--border)">' + h(ih) + '</td>'
+      + '<td style="padding:3px 6px;border-bottom:1px solid var(--border);color:' + color + '">'
+      + (mapped ? '✓ ' + h(mapped) : '<select style="font-size:11px" onchange="_importState.mapping[' + i + ']=this.value>=0?parseInt(this.value):-1;_updateImportPreviewStats()">'
+        + '<option value="-1">— 不导入 —</option>'
+        + targetHeaders.map(function(th, ti) { return '<option value="' + ti + '">' + h(th) + '</option>'; }).join('')
+        + '</select>')
+      + '</td></tr>';
+  });
+  html += '</tbody>';
+  // 数据预览
+  html += '<thead><tr style="background:var(--th-bg)"><th colspan="2" style="padding:6px;border-bottom:1px solid var(--border);border-top:2px solid var(--border)">数据预览（前5行）</th></tr></thead><tbody>';
+  previewRows.forEach(function(row) {
+    var firstCell = row[0] || '';
+    var secondCell = row[1] || '';
+    html += '<tr><td style="padding:3px 6px;border-bottom:1px solid var(--border);color:var(--text2)" colspan="2">' + h(firstCell) + ' | ' + h(secondCell) + (row.length > 2 ? ' | ' + h(row[2]) : '') + ' ...</td></tr>';
+  });
+  html += '</tbody>';
+
+  var table = document.getElementById('imp_preview_table');
+  if (table) table.innerHTML = html;
+  document.getElementById('imp_preview').style.display = 'block';
+  _updateImportPreviewStats();
+}
+
+function _updateImportPreviewStats() {
+  var mappedCount = _importState.mapping.filter(function(m) { return m >= 0; }).length;
+  var total = _importState.headers.length;
+  var stats = document.getElementById('imp_stats');
+  if (stats) stats.textContent = '共 ' + _importState.rows.length + ' 行数据 · ' + mappedCount + '/' + total + ' 列已映射';
+  document.getElementById('imp_confirm').disabled = mappedCount === 0;
+}
+
+function confirmImport() {
+  if (!_importState.rows.length) { toast('没有可导入的数据', 'warn'); return; }
+  var targetHeaders = _importState.target === 'leads' ? LEADS_HEADERS : FUP_HEADERS;
+  var mappedCount = _importState.mapping.filter(function(m) { return m >= 0; }).length;
+  if (mappedCount === 0) { toast('请至少映射一列', 'warn'); return; }
+
+  var mode = document.getElementById('imp_mode').value;
+  var newData = _importState.rows.map(function(row) {
+    var newRow = new Array(targetHeaders.length).fill('');
+    _importState.mapping.forEach(function(targetIdx, importIdx) {
+      if (targetIdx >= 0 && importIdx < row.length) {
+        newRow[targetIdx] = row[importIdx];
+      }
+    });
+    return newRow;
+  });
+
+  // 过滤全空行
+  newData = newData.filter(function(r) { return r.some(function(c) { return c && c.trim(); }); });
+
+  if (newData.length === 0) { toast('没有有效数据行', 'warn'); return; }
+
+  if (_importState.target === 'leads') {
+    if (mode === 'replace') leadsData = [];
+    leadsData = leadsData.concat(newData);
+  } else {
+    if (mode === 'replace') fupsData = [];
+    fupsData = fupsData.concat(newData);
+  }
+
+  closeImportModal();
+  markDirty();
+  render();
+  updateHeaderStats();
+  toast('成功导入 ' + newData.length + ' 条数据到' + (_importState.target === 'leads' ? '线索池总表' : '跟进记录') + '，请点击保存', 'info');
 }
 
 // ============================================================
