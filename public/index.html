@@ -373,10 +373,24 @@ document.addEventListener('dragstart', function(e){ e.preventDefault(); return f
 // 数据加载
 // ============================================================
 const STORAGE_KEY = 'chromai_leads_v13';
-const API_BASE = (location.protocol === 'https:' || location.protocol === 'http:') && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1' && location.hostname !== '53605bfbac584b98a5cdbd50218be26f.bj5.agentos-app.net' ? '' : ''; // 同源 API
+// 同源 API 优先；静态托管站点（CloudStudio等）指向 Railway 后端实现数据同步
+const _STATIC_HOSTS = ['agentos-app.net', 'workbuddy.link', 'vercel.app', 'github.io'];
+const API_BASE = _STATIC_HOSTS.some(hn => location.hostname.includes(hn)) ? 'https://chromai-leads-fllow-production.up.railway.app' : '';
 const SYNC_ENABLED = typeof fetch !== 'undefined'; // 浏览器支持 fetch 才启用
 let lastSyncTime = 0;     // 上次服务器同步时间戳
 let serverSyncing = false; // 正在从服务器同步中（避免循环）
+let autoSyncTimer = null;  // 自动同步定时器（debounce）
+let serverOnline = false;  // 服务器是否在线
+
+// ---- 自动同步（编辑后 2 秒自动推送）----
+function scheduleAutoSync() {
+  if (autoSyncTimer) clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(function() {
+    autoSyncTimer = null;
+    saveData();
+    syncToServer();
+  }, 2000);
+}
 
 // ---- 服务器同步：拉取 ----
 async function syncFromServer() {
@@ -423,12 +437,19 @@ async function syncFromServer() {
 
     if (updated) {
       lastSyncTime = Date.now();
+      serverOnline = true;
       // 同时更新本地缓存
       saveData();
     }
+    // 更新同步状态
+    var syncEl = document.getElementById('syncStatus');
+    if (syncEl) syncEl.textContent = serverOnline ? '🟢 实时同步' : '🟡 本地模式';
     return updated;
   } catch(e) {
     console.warn('服务器同步失败，使用本地数据:', e.message);
+    serverOnline = false;
+    var syncEl2 = document.getElementById('syncStatus');
+    if (syncEl2) syncEl2.textContent = '🟡 本地模式';
     return false;
   }
 }
@@ -467,17 +488,19 @@ async function syncToServer() {
       })
     ]);
     lastSyncTime = Date.now();
+    serverOnline = true;
     // 更新同步状态显示
     var syncEl = document.getElementById('syncStatus');
-    if (syncEl) syncEl.textContent = '已同步 ' + new Date().toLocaleTimeString('zh-CN');
+    if (syncEl) syncEl.textContent = '🟢 已同步 ' + new Date().toLocaleTimeString('zh-CN');
   } catch(e) {
     console.warn('推送到服务器失败:', e.message);
+    serverOnline = false;
     var syncEl = document.getElementById('syncStatus');
-    if (syncEl) syncEl.textContent = '同步失败，已存本地';
+    if (syncEl) syncEl.textContent = '🟡 同步失败，已存本地';
   }
 }
 
-// ---- 定时拉取服务器更新（每 60 秒）----
+// ---- 定时拉取服务器更新（每 15 秒）----
 setInterval(function() {
   if (serverSyncing || isDirty) return; // 正在编辑时不拉取
   syncFromServer().then(function(updated) {
@@ -486,7 +509,7 @@ setInterval(function() {
       render();
     }
   });
-}, 60000);
+}, 15000);
 const LEADS_DEFAULT_HEADERS = ['线索编号','线索来源','活动名称','客户名称(脱敏)','联系人','职位','联系电话','邮箱','所属行业','地域','企业规模','当前阶段','线索评分(0-100)','负责人','负责大区','创建日期','备注'];
 const FUP_DEFAULT_HEADERS = ['跟进编号','线索编号','跟进日期','跟进方式','跟进内容','产品型号意向','预算范围(万元)','预算确认','采购时间窗','预计成交金额(万)','成交概率(%)','阶段变化','下一步计划','负责人','操作'];
 let LEADS_HEADERS = [...LEADS_DEFAULT_HEADERS];
@@ -41927,7 +41950,7 @@ function batchPasteRange(text) {
     }
   }
 
-  if (pasteCount > 0) { markDirty(); render(); }
+  if (pasteCount > 0) { markDirty(); saveData(); scheduleAutoSync(); render(); }
   toast('已粘贴 ' + data.length + 'x' + (data[0] ? data[0].length : 0) + ' 区域', 'info');
 }
 
@@ -41945,7 +41968,7 @@ function batchClearRange() {
       }
     }
   }
-  if (count > 0) { markDirty(); render(); }
+  if (count > 0) { markDirty(); saveData(); scheduleAutoSync(); render(); }
   toast('已清空 ' + count + ' 个单元格', 'info');
 }
 
@@ -42025,6 +42048,7 @@ function finishEdit(newVal) {
 
   sourceArr[rowIdx][col] = newVal;
   markDirty();
+  scheduleAutoSync(); // 编辑后自动同步到服务器
 
   // Update cell display inline — NO full re-render
   td.classList.remove('editing');
@@ -42140,6 +42164,7 @@ function submitNewLead() {
 
   leadsData.push(newLead);
   saveData();
+  scheduleAutoSync();
   closeAddLeadModal();
   toast(`新增线索: ${id} - ${cname}`, 'info');
 
@@ -42262,6 +42287,7 @@ function addFollowup() {
 
   fupsData.push(newRow);
   saveData();
+  scheduleAutoSync();
   toast('新增跟进记录: ' + newRow[0], 'info');
   switchTab('followups');
 
@@ -42279,6 +42305,7 @@ function deleteFupRow(rowIdx) {
   if (!confirm(`确定删除跟进记录 ${fupsData[rowIdx][0]} 吗？此操作不可恢复。`)) return;
   fupsData.splice(rowIdx, 1);
   saveData();
+  scheduleAutoSync();
   toast('已删除跟进记录', 'info');
   render();
 }
@@ -42289,6 +42316,7 @@ function deleteLeadRow(rowIdx) {
   if (!confirm('确定删除线索 ' + lid + ' 吗？\n此操作不可恢复，关联的跟进记录不会被删除。')) return;
   leadsData.splice(rowIdx, 1);
   saveData();
+  scheduleAutoSync();
   toast('已删除线索 ' + lid, 'info');
   render();
 }
@@ -42565,10 +42593,11 @@ function confirmImport() {
   }
 
   closeImportModal();
-  markDirty();
+  saveData();
+  scheduleAutoSync();
   render();
   updateHeaderStats();
-  toast('成功导入 ' + newData.length + ' 条数据到' + (_importState.target === 'leads' ? '线索池总表' : '跟进记录') + '，请点击保存', 'info');
+  toast('成功导入 ' + newData.length + ' 条数据并已同步', 'info');
 }
 
 // ============================================================
@@ -42590,6 +42619,8 @@ function init() {
 
   // 启动后异步从服务器拉取最新数据（不阻塞首屏渲染）
   serverSyncing = true;
+  var syncEl0 = document.getElementById('syncStatus');
+  if (syncEl0) syncEl0.textContent = '🔄 连接服务器...';
   syncFromServer().then(function(serverUpdated) {
     serverSyncing = false;
     if (serverUpdated) {
