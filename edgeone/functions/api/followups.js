@@ -44,6 +44,73 @@ export async function onRequest({ request, env }) {
         store.get('leads', { type: 'json', consistency: 'strong' })
       ]);
       const old = oldFups || { headers: [], data: [] };
+
+      // ---- admin 整表替换通道（列改名 / 删列专用；显式确认 + 全量覆盖）----
+      // 背景：_acl.js 的 unionHeaders 是「旧表头全保留 + 新表头追加」的并集语义
+      //      （设计上用于防止前端误删列丢数据，是正确的，不可改动），
+      //      因此常规 POST 永远无法完成「列改名 / 删列」——改名只会追加新列。
+      // 本分支是管理员唯一的整表覆盖入口：不 diff、不 merge，直接用 body 的
+      // headers + data 覆盖 followups，写入前保留快照，可回滚到上一版本。
+      //
+      // 安全约束（任一不满足即 return，绝不落到下方 diff/merge 主流程，且不写任何数据）：
+      //   1) 仅 admin；2) replaceAll === true；3) confirmReplace === true；
+      //   4) headers/data 均为数组且 headers 非空；5) headers 必须含主键列「跟进编号」；
+      //   6) 传入 expectRows/expectCols 时行数/列数必须精确匹配（防前端旧快照误覆盖）。
+      //
+      // 扩展提示：给 leads 加同样通道时整段照抄即可，仅需把 store key 改 'leads'、
+      // objectType 改 'lead'、主键常量改 H.LEAD_ID，并改用 leads 的 touch 逻辑。
+      if (body.replaceAll === true) {
+        // 1) 角色门禁（非管理员即使带 replaceAll 也在此终止）
+        if (user.role !== 'admin') {
+          return json({ ok: false, error: 'forbidden', message: '整表替换仅管理员可用' }, 403, xh);
+        }
+        // 2) 显式二次确认（防误触 / 防自动化脚本静默覆盖）
+        if (body.confirmReplace !== true) {
+          return json({ ok: false, error: 'replace_confirm_required', message: '整表替换需显式确认 confirmReplace:true' }, 403, xh);
+        }
+        // 3) 载荷结构校验（整表替换不接受部分提交）
+        if (!Array.isArray(body.headers) || !Array.isArray(body.data) || body.headers.length === 0) {
+          return json({ ok: false, error: 'bad_request', message: 'replaceAll 必须提供完整的 headers 与 data' }, 400, xh);
+        }
+        // 4) 主键列校验（缺失将导致后续 diff/权限判定无法定位行身份，直接拒绝）
+        if (body.headers.indexOf(String(H.FUP_ID)) < 0) {
+          return json({ ok: false, error: 'bad_request', message: 'headers 缺少主键列「跟进编号」' }, 400, xh);
+        }
+        // 5) 行数自校验（调用方传了 expectRows 才校验；不传则不校验）
+        if (typeof body.expectRows === 'number' && body.data.length !== body.expectRows) {
+          return json({
+            ok: false, error: 'row_count_mismatch',
+            expect: body.expectRows, actual: body.data.length,
+            message: '行数与预期不符，已拒绝写入'
+          }, 409, xh);
+        }
+        // 6) 列数自校验（与行数同形式；error 保持同名以兼容调用方统一判定）
+        if (typeof body.expectCols === 'number' && body.headers.length !== body.expectCols) {
+          return json({
+            ok: false, error: 'row_count_mismatch',
+            expect: body.expectCols, actual: body.headers.length,
+            message: '列数与预期不符，已拒绝写入'
+          }, 409, xh);
+        }
+
+        // 写入前保留旧全量快照（上一版本 + 当日初始状态），备份失败不阻断写入
+        await snapshotBeforeWrite(store, 'followups', old, user);
+        await store.set('followups', JSON.stringify({ headers: body.headers, data: body.data }));
+        await purgeOldBackups(store);
+        // 整表替换影响全量：owner/region 留空 → 仅触达 admin 分片，并同步 fupsCount
+        await touchScopeModified(store, [{ owner: '', region: '' }], { fupsCount: body.data.length });
+        await appendLog(store, {
+          email: user.email, name: user.name, role: user.role, event: 'restore',
+          objectType: 'fup', objectId: '', result: 'success', ip: getIp(request),
+          detail: 'admin 整表替换：' + body.data.length + ' 行 / ' + body.headers.length + ' 列'
+            + '（原 ' + ((old.data || []).length) + ' 行 / ' + ((old.headers || []).length) + ' 列）'
+        });
+        return json({
+          ok: true, count: body.data.length, replaced: true,
+          before: { rows: (old.data || []).length, cols: (old.headers || []).length }
+        }, 200, xh);
+      }
+
       const leadIdx = buildLeadIndex(leads);
       const d = diffDataset(user, old, body, 'fup', leadIdx);
       const checked = checkWritePerm(user, d, 'fup', leadIdx);
