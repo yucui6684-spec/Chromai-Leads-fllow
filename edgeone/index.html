@@ -43262,7 +43262,9 @@ function fdSyncRecCount() {
 }
 
 /**
- * 收集详情弹窗里所有跟进子项 → [{d,t}]（已过滤日期与内容都为空的项）
+ * 收集详情弹窗里所有跟进子项 → [{d,t}]（内容为空的项一律丢弃）
+ * ⚠️ 判定只看内容：只填了日期没填内容的占位项也必须丢弃，
+ *    否则线上会出现 {"d":"2026-09-28","t":""} 这类脏数据（真实案例 FUP-2026-0284）。
  * @returns {{d:string,t:string}[]} 子项数组（弹窗不存在时返回 []）
  */
 function fdCollectRecords() {
@@ -43273,8 +43275,8 @@ function fdCollectRecords() {
     const dEl = el.querySelector('.fd-rec-d');
     const tEl = el.querySelector('.fd-rec-t');
     const d = dEl ? String(dEl.value || '').trim() : '';
-    const t = tEl ? String(tEl.value || '') : '';
-    if (!d && !t.trim()) return;               // 完全为空的占位项丢弃
+    const t = tEl ? String(tEl.value || '').trim() : '';
+    if (!t) return;                            // 跟进记录内容必填；日期为空允许（历史遗留数据可能没有日期）
     out.push({ d: d, t: t });
   });
   return out;
@@ -43299,15 +43301,22 @@ function saveFupDetail(rowIdx) {
     r[ci] = String(el.value === null || el.value === undefined ? '' : el.value).trim();
   });
   // 跟进记录子项（日期 + 内容）整体写回「跟进记录」列
+  // ⚠️ 内容为空的占位项会被 fdCollectRecords 丢弃；一条都没有时只提示、不阻拦保存（其余字段照常写回）
   const rl = document.getElementById('fdRecList');
-  if (rl) fupRecordsSet(r, fdCollectRecords());
+  let recWarn = false;
+  if (rl) {
+    const recs = fdCollectRecords();
+    recWarn = (recs.length === 0);
+    fupRecordsSet(r, recs);
+  }
   markDirty();
   saveData();
   scheduleAutoSync();
   updateHeaderStats();
   closeFupDetail();
   renderFollowups();
-  toast('已保存', 'info');
+  if (recWarn) toast('至少填写一条跟进记录的内容', 'warn');
+  else toast('已保存', 'info');
 }
 
 /**
