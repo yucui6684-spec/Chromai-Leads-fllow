@@ -1076,6 +1076,11 @@ setInterval(function() {
         serverSyncing = false;
         if (updated) {
           lastServerModified = info.lastModified;
+          // 轮询也可能拉到被陈旧客户端 union 出来的 19 列脏表头，同样本地自愈。
+          // 只在「无未保存修改且未处于编辑态」时动手，避免摘列导致正在编辑的单元格列索引漂移。
+          if (!isDirty && !editingCell) {
+            if (fupNormalizeDupCols()) { try { saveData(); } catch (e) {} }
+          }
           updateHeaderStats();
           if (!isDirty && !editingCell) {
             render();
@@ -42885,6 +42890,28 @@ function fupIsWideCol(hd, ci) {
 }
 
 /**
+ * 归一化：服务端 unionHeaders 只增不减。迁移后若某个陈旧客户端推送了旧表头，
+ * 服务端会同时并存新旧两套列（19 列）。这里在客户端本地摘掉冗余的旧列，让布局自愈回 16 列。
+ * ⚠️ 门控条件必须严格：只有「新名已存在」时才动手，避免把尚未迁移的正常旧布局误删。
+ * @returns {boolean} 是否发生了摘列
+ */
+function fupNormalizeDupCols() {
+  if (FUP_HEADERS.indexOf('首次跟进') < 0 || FUP_HEADERS.indexOf('跟进记录') < 0) return false;
+  var drop = [];
+  var li = FUP_HEADERS.indexOf('跟进内容');      if (li >= 0) drop.push(li);
+  var ri = FUP_HEADERS.indexOf('跟进内容09.14'); if (ri >= 0) drop.push(ri);
+  if (!drop.length) return false;
+  drop.sort(function(a, b) { return b - a; });   // 从后往前删，避免索引漂移
+  drop.forEach(function(ci) {
+    FUP_HEADERS.splice(ci, 1);
+    for (var i = 0; i < fupsData.length; i++) {
+      if (Array.isArray(fupsData[i])) fupsData[i].splice(ci, 1);
+    }
+  });
+  return true;
+}
+
+/**
  * 解析「跟进记录」子项 JSON。兼容旧纯文本值（视为一条无日期子项），非法/空返回 []。
  * @param {Array} row 跟进记录行
  * @param {number} [ci] 列索引，缺省用 fupRecCol()
@@ -44912,6 +44939,9 @@ function init() {
   }
   // 需求七：客户端不做列名迁移（rename 由服务端一次性完成）；
   // 迁移期双名兼容由 fupRecCol() / fupFirstCol() 承担，新旧表头下 UI 表现一致。
+  // ⚠️ 必须在 fupRecCol() / fupFirstCol() 首次被使用之前跑：摘掉服务端 union 出来的冗余旧列，
+  //    否则这一帧里 fupRecCol() 会命中旧列索引。
+  if (fupNormalizeDupCols()) { try { saveData(); } catch (e) {} }
   updateHeaderStats();
   render();
 
@@ -44924,6 +44954,8 @@ function init() {
   syncFromServer().then(function(serverUpdated) {
     serverSyncing = false;
     if (serverUpdated) {
+      // 服务端表头可能已被陈旧客户端 union 成 19 列，本地摘掉冗余旧列自愈回 16 列（同样要先于 fupRecCol 生效）
+      if (fupNormalizeDupCols()) { try { saveData(); } catch (e) {} }
       updateHeaderStats();
       render();
       toast('已从服务器同步最新数据', 'info');
