@@ -423,10 +423,15 @@ tr.tr-selected td{background:rgba(55,138,221,.12)!important}
 .fup-list tbody td.editable:hover{background:#eef2f7!important}
 .fup-list tbody td.editing{padding:0;overflow:visible}
 .fup-list tbody tr:last-child td{border-bottom:none}
-/* 长文本列（客户名称 / 首次跟进 / 跟进记录 / 下一步计划）：与「下一步计划」同宽，超长自动换行 */
+/* 长文本列（客户名称 / 首次反馈 / 跟进记录 / 下一步计划）：宽度按内容自适应（下限 200 / 上限 420），超长自动换行 */
 .fup-list tbody td.fup-wide{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;line-height:1.55;height:auto;min-height:52px}
 .fup-list thead th.fup-wide{height:auto;padding:8px 12px;white-space:normal;line-height:1.4}
 .fup-list tbody td.fup-wide.editing{padding:0;overflow:visible}
+/* 宽度按内容自适应：下限防窄到 3-4 字就换行，上限防单条超长把表格横向撑爆。
+   ⚠️ 表格为默认 table-layout:auto，才能真正由内容驱动；min/max 落在 th/td 上才生效（col 上的 min/max 浏览器不保证支持）。 */
+.fup-list thead th.fup-wide,.fup-list tbody td.fup-wide{min-width:200px;max-width:420px}
+/* 虚拟列「客户名称」：比数据列略窄的独立区间 */
+.fup-list thead th.fup-gname,.fup-list tbody td.fup-gname{min-width:180px;max-width:300px}
 /* 跟进记录列（条数 + 最新一条预览，点击打开详情弹窗编辑子项） */
 .fup-list tbody td.fup-rec{cursor:pointer}
 .fup-rec-n{display:inline-block;font-size:10px;font-weight:700;color:#fff;background:var(--blue);border-radius:10px;padding:1px 7px;margin-right:6px;vertical-align:middle}
@@ -499,8 +504,12 @@ tr.tr-selected td{background:rgba(55,138,221,.12)!important}
 }
 .fd-newplan textarea:focus{outline:none;border-color:var(--blue)}
 .fd-np-actions{display:flex;justify-content:flex-end;margin-top:8px}
+/* 跟进记录子项区块：紧跟在「首次反馈」下方，缩进 + 浅色底，视觉上作为首次反馈的下一级 */
+.fd-sub{margin:2px 0 2px 10px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-left:2px solid var(--blue);border-radius:6px}
+.fd-sub-t{font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px}
+.fd-sub-t .fd-sub-n{font-weight:400;color:var(--text3)}
 /* 跟进记录子项（日期 + 内容，可无限新增） */
-.fd-rec{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.fd-rec{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px}
 .fd-rec-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .fd-rec-d{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:5px;font-size:12px;font-family:var(--font)}
 .fd-rec-d:focus{outline:none;border-color:var(--blue)}
@@ -1101,7 +1110,7 @@ setInterval(function() {
   });
 }, 5000);
 const LEADS_DEFAULT_HEADERS = ['线索编号','线索来源','活动名称','客户名称(脱敏)','联系人','职位','联系电话','邮箱','所属行业','地域','企业规模','当前阶段','线索评分(0-100)','负责人','负责大区','创建日期','备注'];
-const FUP_DEFAULT_HEADERS = ['跟进编号','线索编号','跟进日期','跟进方式','首次跟进','跟进记录','产品型号意向','预算范围(万元)','预算确认','采购时间窗','预计成交金额(万)','成交概率(%)','阶段变化','下一步计划','负责人','操作'];
+const FUP_DEFAULT_HEADERS = ['跟进编号','线索编号','跟进日期','跟进方式','首次反馈','跟进记录','产品型号意向','预算范围(万元)','预算确认','采购时间窗','预计成交金额(万)','成交概率(%)','阶段变化','下一步计划','负责人','操作'];
 // 迁移期兼容：服务端完成列名 replaceAll 之前，线上表头里仍是旧名。
 // 旧名同样按系统列保护 —— 不得在表头上出现 ✕ 删除按钮，防止用户误删待迁移的数据列。
 const FUP_PROTECTED_LEGACY = ['跟进内容', '跟进内容09.14'];
@@ -42516,7 +42525,7 @@ function latestFupContent(leadId) {
     if (!best || dt >= bestDate) { best = ct; bestDate = dt; }
   }
   if (best) return best;
-  // 降级：该线索所有「跟进记录」子项里取最后一条内容（首次跟进为空时仍能展示最近进展）
+  // 降级：该线索所有「跟进记录」子项里取最后一条内容（首次反馈为空时仍能展示最近进展）
   let fallback = '';
   const C_RC = fupRecCol();
   for (let j = 0; j < fupsData.length; j++) {
@@ -42724,7 +42733,7 @@ function renderFollowups() {
   ${isSales() ? '' : '<label>负责人：</label>' + mselHtml('fupSales', fupSalesList)}
   <label>方式：</label>${mselHtml('fupMethod', METHOD_OPTIONS)}
   <label>阶段变化：</label>${mselHtml('fupStage', STAGE_CHANGE)}
-  <label>内容检索：</label><input value="${h(fupFilterContent)}" oninput="fupFilterContent=this.value;debounceFupRender()" placeholder="首次跟进/跟进记录/客户/联系人/产品/金额/计划" style="width:180px">
+  <label>内容检索：</label><input value="${h(fupFilterContent)}" oninput="fupFilterContent=this.value;debounceFupRender()" placeholder="首次反馈/跟进记录/客户/联系人/产品/金额/计划" style="width:180px">
   <button class="small" onclick="clearFupFilters()" title="清除所有筛选">重置</button>
 </div>`;
 
@@ -42747,7 +42756,7 @@ function renderFollowups() {
         // 虚拟列：客户名称(脱敏) + 联系人（实时取自线索池，不占数据列）
         const lead = leadMap[(val || '').trim()];
         // 客户名称为长文本列，与「下一步计划」同宽且自动换行；联系人保持窄列
-        tds += `<td class="fup-ghost fup-wide" title="${lead?h(lead[L_CNAME2]||''):''}">${lead ? `<span class="fup-ghost-link" onclick="event.stopPropagation();openFupDetail(${origIdx})" title="点击查看该线索完整信息">${h(lead[L_CNAME2] || '—')}</span>` : '<span class="fup-ghost-dim">未关联</span>'}</td>`;
+        tds += `<td class="fup-ghost fup-wide fup-gname" title="${lead?h(lead[L_CNAME2]||''):''}">${lead ? `<span class="fup-ghost-link" onclick="event.stopPropagation();openFupDetail(${origIdx})" title="点击查看该线索完整信息">${h(lead[L_CNAME2] || '—')}</span>` : '<span class="fup-ghost-dim">未关联</span>'}</td>`;
         tds += `<td class="fup-ghost" title="${lead?h(lead[L_CONTACT2]||''):''}">${lead ? `<span class="fup-ghost-link" onclick="event.stopPropagation();openFupDetail(${origIdx})" title="点击查看该线索完整信息">${h(lead[L_CONTACT2] || '—')}</span>` : '<span class="fup-ghost-dim">—</span>'}</td>`;
       } else if (ci === fupRecCol()) {
         // 跟进记录：显示子项条数 + 最新一条（日期 + 内容预览），点击打开详情弹窗编辑子项
@@ -42772,7 +42781,7 @@ function renderFollowups() {
         // 负责人下拉按角色裁剪：admin 全量；region/sales 限本大区成员（服务端同样强制校验）
         tds += `<td class="editable" data-col="${ci}" data-type="select" data-options="${h((isAdmin() ? fupSalesList : ownerChoices()).join(','))}">${h(val)}</td>`;
       } else if (fupIsWideCol(hd, ci)) {
-        // 长文本列（首次跟进 / 跟进记录 / 下一步计划）：与「下一步计划」同宽，超长自动换行
+        // 长文本列（首次反馈 / 跟进记录 / 下一步计划）：宽度按内容自适应（下限 200 / 上限 420），超长自动换行
         tds += `<td class="editable fup-wide" data-col="${ci}">${h(val)}</td>`;
       } else {
         tds += `<td class="editable" data-col="${ci}">${h(val)}</td>`;
@@ -42791,12 +42800,12 @@ function renderFollowups() {
       return '<th style="width:120px;text-align:center" title="跟进日期起48小时内需填写「跟进记录」，超时未填写整行标红">⏱ 48h时限</th><th style="width:50px;text-align:center">操作</th>';
     }
     if (hd === '线索编号') {
-      // 虚拟列：客户名称/联系人（实时取自线索池）；客户名称为长文本列，与「下一步计划」同宽
-      return '<th style="min-width:90px">'+h(hd)+'</th><th class="fup-wide" style="width:'+FUP_WIDE_PX+'px;text-align:center" title="自动带入市场留资清单的客户名称(脱敏)">👤 客户名称</th><th style="width:100px;text-align:center" title="自动带入市场留资清单的联系人">🧑 联系人</th>';
+      // 虚拟列：客户名称/联系人（实时取自线索池）；客户名称为长文本列，宽度按内容自适应（180~300）
+      return '<th style="min-width:90px">'+h(hd)+'</th><th class="fup-wide fup-gname" style="min-width:'+FUP_GNAME_MIN+'px;max-width:'+FUP_GNAME_MAX+'px;text-align:center" title="自动带入市场留资清单的客户名称(脱敏)">👤 客户名称</th><th style="width:100px;text-align:center" title="自动带入市场留资清单的联系人">🧑 联系人</th>';
     }
     const delBtn = (!FUP_DEFAULT_HEADERS.includes(hd) && FUP_PROTECTED_LEGACY.indexOf(hd) < 0)
       ? `<span class="col-del" onclick="event.stopPropagation();removeColumn('followups',${i})" title="删除此列">✕</span>` : '';
-    // 长文本列（首次跟进 / 跟进记录 / 下一步计划）统一加宽，超长自动换行；按列索引判定以兼容旧列名
+    // 长文本列（首次反馈 / 跟进记录 / 下一步计划）按内容自适应、超长自动换行；按列索引判定以兼容旧列名
     return `<th${fupIsWideCol(hd, i) ? ' class="fup-wide"' : ''}><span class="th-edit" contenteditable="true" data-tab="followups" data-col="${i}" spellcheck="false">${h(hd)}</span>${delBtn}</th>`;
   }).join('');
 
@@ -42815,7 +42824,7 @@ function renderFollowups() {
 </div>
 <div class="table-wrap fup-list">
   <table class="fup-table">
-    <colgroup><col style="width:36px">${FUP_HEADERS.map((hd,ci)=>hd==='线索编号'?('<col style="min-width:90px"><col style="width:'+FUP_WIDE_PX+'px"><col style="width:100px">'):(hd==='操作'?'<col style="width:120px"><col style="width:50px">':(fupIsWideCol(hd,ci)?('<col style="width:'+FUP_WIDE_PX+'px">'):'<col>'))).join('')}</colgroup>
+    <colgroup><col style="width:36px">${FUP_HEADERS.map((hd,ci)=>hd==='线索编号'?('<col style="min-width:90px"><col style="min-width:'+FUP_GNAME_MIN+'px;max-width:'+FUP_GNAME_MAX+'px"><col style="width:100px">'):(hd==='操作'?'<col style="width:120px"><col style="width:50px">':(fupIsWideCol(hd,ci)?('<col style="min-width:'+FUP_WIDE_MIN+'px;max-width:'+FUP_WIDE_MAX+'px">'):'<col>'))).join('')}</colgroup>
     <thead><tr>${fupHeaderHtml}</tr></thead>
     <tbody>${rows}</tbody>
   </table>
@@ -42853,8 +42862,11 @@ const FUP_PILL_COLORS = {
 // 需要渲染成胶囊的列（按表头名匹配，用户改名/增删自定义列后不影响判定）
 const FUP_PILL_COLS = ['跟进方式', '预算确认', '阶段变化'];
 
-// 长文本列统一宽度（px）——需求七：客户名称 / 首次跟进 / 跟进记录 / 下一步计划 同宽且自动换行
-const FUP_WIDE_PX = 240;
+// 长文本列宽度：按内容自适应，而非写死固定值——需求七（用户反馈：不能 3、4 个字就换行，也不能撑爆横向）
+const FUP_WIDE_MIN = 200;   // 长文本列保底宽度：防止窄到 3-4 个字就换行
+const FUP_WIDE_MAX = 420;   // 上限：避免单条内容过长把表格横向撑爆
+const FUP_GNAME_MIN = 180;  // 虚拟列「客户名称」保底宽度
+const FUP_GNAME_MAX = 300;
 
 /**
  * 「跟进记录」列索引（单元格存 JSON 子项数组字符串）。
@@ -42868,18 +42880,18 @@ function fupRecCol() {
 }
 
 /**
- * 「首次跟进」列索引（纯文本列）。
- * 双名兼容：优先新名「首次跟进」，回退迁移前的旧名「跟进内容」，都没有才用 fallback 4。
+ * 「首次反馈」列索引（纯文本列）。
+ * 双名兼容：优先新名「首次反馈」，回退迁移前的旧名「跟进内容」，都没有才用 fallback 4。
  * @returns {number} 列索引
  */
 function fupFirstCol() {
-  var i = FUP_HEADERS.indexOf('首次跟进');
+  var i = FUP_HEADERS.indexOf('首次反馈');
   if (i < 0) i = FUP_HEADERS.indexOf('跟进内容');
   return i >= 0 ? i : 4;
 }
 
 /**
- * 是否为长文本列（与「下一步计划」同宽、超长自动换行）。
+ * 是否为长文本列（宽度按内容自适应，超长自动换行）。
  * ⚠️ 必须按列索引判定：迁移完成前表头仍是旧名，按列名匹配会整体失效。
  * @param {string} hd 列头名称（仅用于匹配「下一步计划」等不受迁移影响的列）
  * @param {number} ci 列索引
@@ -42896,7 +42908,7 @@ function fupIsWideCol(hd, ci) {
  * @returns {boolean} 是否发生了摘列
  */
 function fupNormalizeDupCols() {
-  if (FUP_HEADERS.indexOf('首次跟进') < 0 || FUP_HEADERS.indexOf('跟进记录') < 0) return false;
+  if (FUP_HEADERS.indexOf('首次反馈') < 0 || FUP_HEADERS.indexOf('跟进记录') < 0) return false;
   var drop = [];
   var li = FUP_HEADERS.indexOf('跟进内容');      if (li >= 0) drop.push(li);
   var ri = FUP_HEADERS.indexOf('跟进内容09.14'); if (ri >= 0) drop.push(ri);
@@ -43081,8 +43093,8 @@ function deleteFupFromDetail(rowIdx) {
 }
 
 /**
- * 打开跟进记录详情弹窗：线索基本信息（只读）+ 本次跟进信息（可编辑）
- * + 下一步计划新增 + 跟进历史
+ * 打开跟进记录详情弹窗：线索基本信息（只读）+ 本次跟进信息（可编辑，其中「跟进记录」子项紧跟在
+ * 「首次反馈」正下方）+ 下一步计划新增 + 跟进历史
  * @param {number} rowIdx 在 fupsData 中的行索引
  */
 function openFupDetail(rowIdx) {
@@ -43114,6 +43126,24 @@ function openFupDetail(rowIdx) {
     infoHtml = '<div class="fd-empty">未关联线索（本条跟进记录的线索编号：' + (h(leadId) || '空') + '）</div>';
   }
 
+  // ---- 2.5 跟进记录子项（日期 + 内容，可无限新增）----
+  // 需求七修正3：不再单独成 sec，而是作为「首次反馈」的下一级，紧跟其下方渲染（见下方 fieldsHtml 循环）
+  const recList = fupRecords(r);
+  const recHtml = '<div class="fd-sub">'
+    + '<div class="fd-sub-t">跟进记录<span class="fd-sub-n" id="fdRecCount">（' + recList.length + ' 条）</span></div>'
+    + '<div id="fdRecList">' + recList.map(function(it) {
+    return '<div class="fd-rec">'
+      + '<div class="fd-rec-h">'
+      + '<input type="date" class="fd-rec-d" value="' + h(it.d) + '">'
+      + '<button type="button" class="small danger fd-rec-del" onclick="this.closest(\'.fd-rec\').remove()">✕</button>'
+      + '</div>'
+      + '<textarea class="fd-rec-t" rows="2" placeholder="本次跟进内容">' + h(it.t) + '</textarea>'
+      + '</div>';
+  }).join('') + '</div>'
+  + '<button type="button" class="small" onclick="fdAddRecord()" style="margin-top:8px">+ 新增跟进</button>'
+  + (recList.length ? '' : '<div class="fd-empty" style="margin-bottom:8px">暂无跟进记录，点击「+ 新增跟进」添加（只需填日期和内容）</div>')
+  + '</div>';
+
   // ---- 2. 本次跟进信息（可编辑） ----
   const cd = fupCountdownInfo(r);
   const cdHtml = (cd.state === 'over')
@@ -43136,21 +43166,9 @@ function openFupDetail(rowIdx) {
     else ctrl = '<input id="fd_' + ci + '" class="form-control" value="' + h(val) + '"' + (readonly ? ' disabled' : '') + '>';
     fieldsHtml += '<div class="fd-field' + (isLong ? ' full' : '') + '"><label>' + h(hd)
       + (readonly ? ' <span style="color:var(--text3)">（主键，不可修改）</span>' : '') + '</label>' + ctrl + '</div>';
+    // 需求七修正3：「跟进记录」子项紧跟在「首次反馈」正下方，独占一整行（.fd-field.full）
+    if (ci === fupFirstCol()) fieldsHtml += '<div class="fd-field full">' + recHtml + '</div>';
   });
-
-  // ---- 2.5 跟进记录子项（日期 + 内容，可无限新增） ----
-  const recList = fupRecords(r);
-  const recHtml = '<div id="fdRecList">' + recList.map(function(it) {
-    return '<div class="fd-rec">'
-      + '<div class="fd-rec-h">'
-      + '<input type="date" class="fd-rec-d" value="' + h(it.d) + '">'
-      + '<button type="button" class="small danger fd-rec-del" onclick="this.closest(\'.fd-rec\').remove()">✕</button>'
-      + '</div>'
-      + '<textarea class="fd-rec-t" rows="2" placeholder="本次跟进内容">' + h(it.t) + '</textarea>'
-      + '</div>';
-  }).join('') + '</div>'
-  + '<button type="button" class="small" onclick="fdAddRecord()" style="margin-top:8px">+ 新增跟进</button>'
-  + (recList.length ? '' : '<div class="fd-empty" style="margin-bottom:8px">暂无跟进记录，点击「+ 新增跟进」添加（只需填日期和内容）</div>');
 
   // ---- 3. 下一步计划新增 ----
   const planHtml = '<div class="fd-newplan">'
@@ -43197,7 +43215,6 @@ function openFupDetail(rowIdx) {
     + '</div>'
     + '<div class="fd-sec"><div class="fd-sec-t">本次跟进信息</div>' + cdHtml
     + '<div class="fd-form">' + fieldsHtml + '</div></div>'
-    + '<div class="fd-sec"><div class="fd-sec-t">跟进记录<span id="fdRecCount" style="font-weight:400;color:var(--text3)">（' + recList.length + ' 条）</span></div>' + recHtml + '</div>'
     + '<div class="fd-sec"><div class="fd-sec-t">下一步计划新增</div>' + planHtml + '</div>'
     + '<div class="fd-sec"><div class="fd-sec-t">跟进历史（' + hist.length + ' 条）</div>' + histHtml + '</div>'
     + '</div>'
@@ -44404,7 +44421,7 @@ function buildBatchFupEditCols() {
   var cols = [
     { col: fupCol('跟进日期', 2),  name: '跟进日期', type: 'text' },
     { col: fupCol('跟进方式', 3),  name: '跟进方式', type: 'select', list: METHOD_OPTIONS },
-    { col: fupFirstCol(), name: '首次跟进', type: 'text' },
+    { col: fupFirstCol(), name: '首次反馈', type: 'text' },
     { col: fupCol('产品型号意向', 6),  name: '产品型号意向', type: 'text' },
     { col: fupCol('预算范围(万元)', 7),  name: '预算范围(万元)', type: 'text' },
     { col: fupCol('预算确认', 8),  name: '预算确认', type: 'select', list: BUDGET_CONFIRM },
