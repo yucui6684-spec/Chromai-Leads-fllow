@@ -1,65 +1,46 @@
-// 科诺美线索系统 API - mql（MQL评分标准，Blob 存储）
+// 科诺美线索系统 API - mql（MQL评分标准配置）
+// GET：所有登录用户可读（不过滤）；POST：仅 admin 可写，触达 meta.scopeModified.cfg。
 import { getStore } from "@edgeone/pages-blob";
+import { optionsResp, json, unauthorized, authHeaders, requireAuth, getIp } from './_auth.js';
+import { touchScopeModified } from './_acl.js';
+import { appendLog } from './_log.js';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
-};
-
-async function updateMeta(store) {
-  try {
-    const meta = await store.get('meta', { type: 'json', consistency: 'strong' }) || {};
-    meta.lastModified = Date.now();
-    await store.set('meta', JSON.stringify(meta));
-  } catch(e) { /* meta 更新失败不影响主流程 */ }
-}
-
-export async function onRequest({ request }) {
-  if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+export async function onRequest({ request, env }) {
+  if (request.method === 'OPTIONS') return optionsResp();
 
   const store = getStore('chromai-leads');
+  const auth = await requireAuth(request, env);
+  if (!auth) return unauthorized();
+  const user = auth.user;
+  const xh = authHeaders(auth);
 
   if (request.method === 'GET') {
     try {
       const data = await store.get('mql', { type: 'json', consistency: 'strong' });
-      if (data) {
-        return new Response(JSON.stringify(data), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS }
-        });
-      }
-      return new Response(JSON.stringify({ data: null }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS }
-      });
+      return json(data ? data : { data: null }, 200, xh);
     } catch (e) {
-      return new Response(JSON.stringify({ data: null, error: e.message }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS }
-      });
+      return json({ data: null, error: e.message }, 200, xh);
     }
   }
 
   if (request.method === 'POST') {
+    if (user.role !== 'admin') {
+      await appendLog(store, {
+        email: user.email, name: user.name, role: user.role, event: 'forbidden',
+        objectType: 'session', detail: '尝试写入MQL评分配置（仅管理员）',
+        result: 'fail', ip: getIp(request)
+      });
+      return json({ ok: false, error: 'forbidden', violations: [{ id: 'mql', field: '*', reason: '仅管理员可修改评分配置' }] }, 403, xh);
+    }
     try {
       const body = await request.json();
       await store.set('mql', JSON.stringify(body));
-      await updateMeta(store);
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS }
-      });
+      await touchScopeModified(store, [], { cfg: true });
+      return json({ ok: true }, 200, xh);
     } catch (e) {
-      return new Response(JSON.stringify({ ok: false, error: e.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS }
-      });
+      return json({ ok: false, error: e.message }, 500, xh);
     }
   }
 
-  return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-    status: 405,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS }
-  });
+  return json({ error: 'Method not allowed' }, 405, xh);
 }

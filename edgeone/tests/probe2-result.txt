@@ -1,0 +1,17 @@
+✓ A1 sales 跨线索注入（原漏洞）→ 403
+✓ A2 数据未落库
+✓ B1 sales update 改挂他人线索 → 403
+✓ B2 线索编号未被改写
+✓ C1 region update 改挂外大区线索 → 403
+✓ D1 region 跨线索 create → 403
+✓ E1 合法+兜底新增 → 200
+✓ E2 兜底行负责人锁本人
+✓ F1 region 清空负责人 → 200 且锁回原值
+✓ F2 同批正常编辑生效
+✓ F3 行未孤儿化（region 仍可见）
+✓ G1 region 负责人置为纯空格 → 仍锁回/403（不得产生实质孤儿行）
+✓ H1 sales 清空负责人 → 锁回本人
+✓ I1 admin 跨线索 create → 200
+✓ J1 sales 正常新增 lead → 200
+
+PROBE_FAILS=0

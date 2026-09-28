@@ -2,6 +2,10 @@
   "name": "chromai-leads",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "seed": "node seed-blob.js",
+    "seed:users": "node seed-blob.js users"
+  },
   "dependencies": {
     "@edgeone/pages-blob": "latest"
   }

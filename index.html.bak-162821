@@ -187,19 +187,13 @@ th .col-del:hover{opacity:1}
 /* Dual bar（行业分布双口径：上=市场留资，下=MQLs）
    注意：公共 .bar-track 是 flex:1（flex-basis:0），在 column 方向的 .bar-dual 里
    basis 作用于高度且容器高度 auto → 会被压成 0 高度而完全不可见。
-   这里显式 flex:0 0 14px 锁死高度（14px = 条形加高后的高度）。 */
-.bar-dual{flex:1;display:flex;flex-direction:column;gap:4px}
-.bar-dual .bar-track{flex:0 0 14px;height:14px;min-height:14px;border-radius:4px;background:var(--border);overflow:hidden}
+   这里显式 flex:0 0 8px 锁死高度。 */
+.bar-dual{flex:1;display:flex;flex-direction:column;gap:3px}
+.bar-dual .bar-track{flex:0 0 9px;height:9px;min-height:9px;border-radius:4px;background:var(--border);overflow:hidden}
 .bar-dual .bar-fill{height:100%;border-radius:4px}
 /* 双条图例 */
 .dual-legend{display:inline-flex;align-items:center;gap:4px;margin-right:12px}
-.dual-swatch{display:inline-block;width:18px;height:9px;border-radius:3px}
-/* 行业分布卡片：纵向撑满，与同行左侧表格卡片等高，底部不留空白 */
-.panel-fill{display:flex;flex-direction:column}
-.panel-fill > *:not(.bar-chart){flex-shrink:0}
-.bar-chart.dual-chart{flex:1;display:flex;flex-direction:column;justify-content:space-between;margin:2px 0 0}
-.bar-chart.dual-chart .bar-row{margin:5px 0}
-.bar-chart.dual-chart .bar-label{font-size:12px}
+.dual-swatch{display:inline-block;width:18px;height:8px;border-radius:3px}
 
 /* Outcome grid */
 .outcome-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -391,136 +385,6 @@ tr.tr-selected td{background:rgba(55,138,221,.12)!important}
 @keyframes modalFadeIn{from{opacity:0}to{opacity:1}}
 @keyframes modalSlideUp{from{transform:translateY(14px);opacity:.6}to{transform:translateY(0);opacity:1}}
 /* 顶栏：品牌区使用 logo 图片（替换原渐变竖条），细分割保留 */
-
-/* ===== MQLs / 跟进记录 列表改造：参照个人工作管理系统 list-view 观感（仅 .fup-list 作用域，不污染线索池） ===== */
-.fup-list{
-  background:var(--surface);border:1px solid var(--border);border-radius:12px;
-  box-shadow:0 1px 3px rgba(0,0,0,.06);
-  max-height:calc(100vh - 260px);overflow:auto
-}
-.fup-list .fup-table{border-collapse:separate;border-spacing:0;font-size:13px}
-.fup-list thead th{
-  position:sticky;top:0;z-index:3;
-  background:#f8fafc;color:var(--text2);
-  font-size:12px;font-weight:700;letter-spacing:.3px;
-  height:44px;padding:0 12px;white-space:nowrap;
-  border:none;border-bottom:1px solid var(--border);
-  box-shadow:inset 0 -1px 0 var(--border)
-}
-.fup-list thead th .th-edit{font-weight:700}
-.fup-list thead th.sel-head{width:36px;text-align:center;padding:0}
-.fup-list tbody td{
-  border:none;border-bottom:1px solid var(--border);
-  padding:10px 12px;height:52px;font-size:13px;vertical-align:middle;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  word-break:normal;transition:background .15s
-}
-.fup-list tbody td.sel-cell{width:36px;text-align:center;padding:0}
-/* 虚拟列（客户名称 / 联系人）：字号略小，与数据列区分 */
-.fup-list tbody td.fup-ghost{font-size:12px}
-.fup-list tbody tr:hover td{background:#f8fafc}
-.fup-list tbody tr.tr-selected td{background:rgba(55,138,221,.12)!important}
-.fup-list tbody td.editable:hover{background:#eef2f7!important}
-.fup-list tbody td.editing{padding:0;overflow:visible}
-.fup-list tbody tr:last-child td{border-bottom:none}
-/* 长文本列（客户名称 / 首次跟进 / 跟进记录 / 下一步计划）：与「下一步计划」同宽，超长自动换行 */
-.fup-list tbody td.fup-wide{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;line-height:1.55;height:auto;min-height:52px}
-.fup-list thead th.fup-wide{height:auto;padding:8px 12px;white-space:normal;line-height:1.4}
-.fup-list tbody td.fup-wide.editing{padding:0;overflow:visible}
-/* 跟进记录列（条数 + 最新一条预览，点击打开详情弹窗编辑子项） */
-.fup-list tbody td.fup-rec{cursor:pointer}
-.fup-rec-n{display:inline-block;font-size:10px;font-weight:700;color:#fff;background:var(--blue);border-radius:10px;padding:1px 7px;margin-right:6px;vertical-align:middle}
-.fup-rec-d{font-size:11px;color:var(--text3);margin-right:6px}
-.fup-rec-t{font-size:12px;color:var(--text2)}
-.fup-rec:hover .fup-rec-t{color:var(--blue)}
-/* 线索编号：粗体蓝色可点标题 */
-.fup-title{font-weight:600;color:var(--blue);cursor:pointer;white-space:nowrap}
-.fup-title:hover{color:#1d4ed8;text-decoration:underline}
-/* 虚拟列（客户名称 / 联系人）：次级文字，同样可点开详情 */
-.fup-ghost-link{font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap}
-.fup-ghost-link:hover{color:var(--blue)}
-.fup-ghost-dim{font-size:12px;color:var(--text3)}
-/* 胶囊标签 */
-.fup-pill{
-  display:inline-block;padding:2px 9px;border-radius:20px;
-  font-size:11px;font-weight:600;color:#fff;line-height:1.5;
-  max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;white-space:nowrap
-}
-
-/* ===== 跟进记录详情弹窗 ===== */
-.fup-detail{width:720px;max-width:100%;max-height:85vh;overflow-y:auto;padding:0}
-.fd-head{
-  padding:18px 24px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  position:sticky;top:0;background:var(--surface);z-index:2;border-radius:10px 10px 0 0
-}
-.fd-head h3{font-size:16px;margin:0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fd-close{
-  flex-shrink:0;width:30px;height:30px;border-radius:8px;border:1px solid var(--border);
-  background:var(--bg);cursor:pointer;font-size:16px;color:var(--text2);
-  display:flex;align-items:center;justify-content:center;line-height:1
-}
-.fd-close:hover{background:var(--border);color:var(--text)}
-.fd-body{padding:20px 24px}
-.fd-sec{margin-bottom:22px}
-.fd-sec:last-child{margin-bottom:0}
-.fd-sec-t{
-  font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;
-  display:flex;align-items:center;gap:6px;padding-left:8px;border-left:3px solid var(--blue)
-}
-.fd-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 16px}
-.fd-item{display:flex;flex-direction:column;gap:2px;min-width:0}
-.fd-k{font-size:11px;color:var(--text3)}
-.fd-v{font-size:12px;color:var(--text);word-break:break-all}
-.fd-empty{
-  font-size:12px;color:var(--text3);background:var(--bg);
-  border:1px dashed var(--border);border-radius:6px;padding:10px 14px
-}
-.fd-warn{
-  font-size:12px;font-weight:600;color:var(--red);margin-bottom:12px;
-  background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:6px;padding:7px 12px
-}
-.fd-ok{font-size:12px;color:var(--text2);margin-bottom:12px}
-.fd-form{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
-.fd-field{display:flex;flex-direction:column;gap:3px;min-width:0}
-.fd-field.full{grid-column:1/-1}
-.fd-field label{font-size:11px;color:var(--text2)}
-.fd-field .form-control{
-  width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
-  padding:6px 8px;border-radius:5px;font-size:12px;font-family:var(--font)
-}
-.fd-field .form-control:focus{outline:none;border-color:var(--blue)}
-.fd-field .form-control:disabled{opacity:.6;cursor:not-allowed}
-.fd-field textarea.form-control{resize:vertical;min-height:60px;line-height:1.6}
-.fd-newplan{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
-.fd-newplan textarea{
-  width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);
-  padding:8px 10px;border-radius:5px;font-size:12px;font-family:var(--font);resize:vertical;min-height:70px;line-height:1.6
-}
-.fd-newplan textarea:focus{outline:none;border-color:var(--blue)}
-.fd-np-actions{display:flex;justify-content:flex-end;margin-top:8px}
-/* 跟进记录子项（日期 + 内容，可无限新增） */
-.fd-rec{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px}
-.fd-rec-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.fd-rec-d{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:5px;font-size:12px;font-family:var(--font)}
-.fd-rec-d:focus{outline:none;border-color:var(--blue)}
-.fd-rec-del{padding:1px 8px;font-size:11px;margin-left:auto}
-.fd-rec-t{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:5px;font-size:12px;font-family:var(--font);resize:vertical;min-height:52px;line-height:1.6}
-.fd-rec-t:focus{outline:none;border-color:var(--blue)}
-.fd-hist{border:1px solid var(--border);border-radius:8px;overflow:hidden}
-.fd-hist-i{padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px}
-.fd-hist-i:last-child{border-bottom:none}
-.fd-hist-i.cur{background:rgba(55,138,221,.08)}
-.fd-hist-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
-.fd-hist-d{font-weight:600;color:var(--text)}
-.fd-hist-tag{font-size:11px;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1px 8px}
-.fd-hist-cur{font-size:11px;color:var(--blue);font-weight:600}
-.fd-hist-c{color:var(--text);word-break:break-all}
-.fd-hist-p{color:var(--text2);margin-top:3px}
-.fd-foot{
-  padding:14px 24px;border-top:1px solid var(--border);
-  display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap
-}
 </style>
 </head>
 <body>
@@ -1096,7 +960,7 @@ setInterval(function() {
   });
 }, 5000);
 const LEADS_DEFAULT_HEADERS = ['线索编号','线索来源','活动名称','客户名称(脱敏)','联系人','职位','联系电话','邮箱','所属行业','地域','企业规模','当前阶段','线索评分(0-100)','负责人','负责大区','创建日期','备注'];
-const FUP_DEFAULT_HEADERS = ['跟进编号','线索编号','跟进日期','跟进方式','首次跟进','跟进记录','产品型号意向','预算范围(万元)','预算确认','采购时间窗','预计成交金额(万)','成交概率(%)','阶段变化','下一步计划','负责人','操作'];
+const FUP_DEFAULT_HEADERS = ['跟进编号','线索编号','跟进日期','跟进方式','跟进内容','产品型号意向','预算范围(万元)','预算确认','采购时间窗','预计成交金额(万)','成交概率(%)','阶段变化','下一步计划','负责人','操作'];
 let LEADS_HEADERS = [...LEADS_DEFAULT_HEADERS];
 // 按表头名动态解析线索列索引（用户添加/删除自定义列后仍能正确定位，防止硬编码索引错位）
 function leadCol(name, fallback) {
@@ -1425,7 +1289,7 @@ function fixFupOwners() {
     ownerMap[leadsData[i][L_ID]] = raw.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '').trim();
   }
   var fixed = 0;
-  var C_LD = fupCol('线索编号', 1), C_OW = fupCol('负责人', 14);
+  var C_LD = fupCol('线索编号', 1), C_OW = fupCol('负责人', 13);
   for (var j = 0; j < fupsData.length; j++) {
     var lid = fupsData[j][C_LD];
     if (ownerMap[lid] !== undefined && fupsData[j][C_OW] !== ownerMap[lid]) {
@@ -41883,9 +41747,6 @@ function updateHeaderStats() {
 // Tab 切换
 // ============================================================
 function switchTab(tab) {
-  // 切换页签前只清理跟进记录详情弹窗（按 id 精确移除，避免误伤新增线索/批量修改等既有弹窗）
-  var _fd = document.getElementById('fupDetailModal');
-  if (_fd) _fd.remove();
   // 日志页仅管理员可见
   if (tab === 'logs' && !isAdmin()) { toast('日志页仅管理员可见', 'warn'); return; }
   if (tab === 'logs') _logsNeedLoad = true;
@@ -41999,10 +41860,11 @@ function render() {
 // ---- 数据看板 ----
 function renderDashboard() {
   // 动态解析列索引（跟进 + 线索，自定义列插入/删除后仍能正确定位）
-  const C_LD = fupCol('线索编号', 1), C_CH = fupCol('阶段变化', 12), C_OW = fupCol('负责人', 14);
+  const C_LD = fupCol('线索编号', 1), C_CH = fupCol('阶段变化', 12), C_OW = fupCol('负责人', 13);
   const L_ID = leadCol('线索编号', 0), L_IND = leadCol('所属行业', 8), L_STAGE = leadCol('当前阶段', 11), L_ACT = leadCol('活动名称', 2);
   const L_REG2 = leadCol('负责大区', 14);
   const L_SRC = leadCol('线索来源', 1);
+  const C_DL = fupDeadlineContentIdx();  // 「跟进内容09.14」判定列（已处理口径）
   const total = leadsData.length;
   const st = {};
   leadsData.forEach(r => { const s = r[L_STAGE] || 'Raw'; st[s] = (st[s] || 0) + 1; });
@@ -42022,7 +41884,7 @@ function renderDashboard() {
   // SQL = 明确有采购意向（跟进记录阶段变化=有采购需求）
   const demandIds = new Set();
   // 待跟进 = 阶段变化 ∈ {继续沟通培养, 有采购需求}（需要销售继续推进的）
-  // 已处理 = 「跟进记录」至少有 1 条子项 与「阶段变化」已填写
+  // 已处理 = 「跟进内容09.14」与「阶段变化」两列均已填写
   let pendingFupCount = 0, doneFupCount = 0;
   fupsData.forEach(r => {
     const lid = r[C_LD] ? r[C_LD].trim() : '';
@@ -42031,7 +41893,7 @@ function renderDashboard() {
     const ch = r[C_CH] || '';
     if (ch === '有采购需求') demandIds.add(lid);
     if (FUP_PENDING_CHANGES.includes((ch || '').trim())) pendingFupCount++;
-    const dlFilled = fupDeadlineFilled(r);
+    const dlFilled = C_DL >= 0 && (r[C_DL] || '').trim() !== '';
     if (dlFilled && (ch || '').trim() !== '') doneFupCount++;
   });
   const mql = fupIds.size;                  // MQL = 转到跟进记录的数据
@@ -42085,18 +41947,18 @@ function renderDashboard() {
   };
 
   // ===== 各销售跟进效果分析（基于全部跟进记录；口径见下） =====
-  // 待跟进 = 阶段变化 ∈ {继续沟通培养, 有采购需求}；已处理 = 跟进记录与阶段变化均已填
+  // 待跟进 = 阶段变化 ∈ {继续沟通培养, 有采购需求}；已处理 = 09.14 与 阶段变化 均已填
   const salesMap = {};
   fupsData.forEach(r => {
     const sales = r[C_OW] || '未分配';
     const change = (r[C_CH] || '').trim();
-    const dlFilled = fupDeadlineFilled(r);
+    const dlFilled = C_DL >= 0 && (r[C_DL] || '').trim() !== '';
     const chFilled = change !== '';
     if (!salesMap[sales]) salesMap[sales] = {tot:0, done:0, pending:0, noCh:0, nurture:0, demand:0, deal:0, invalid:0};
     salesMap[sales].tot++;
     if (FUP_PENDING_CHANGES.includes(change)) salesMap[sales].pending++;  // 待跟进
     if (dlFilled && chFilled) salesMap[sales].done++;                     // 已处理
-    if (!dlFilled) salesMap[sales].noCh++;                                // 跟进记录未填（待补跟进）
+    if (!dlFilled) salesMap[sales].noCh++;                                // 09.14 未填（待补跟进内容）
     if (change === '继续沟通培养') salesMap[sales].nurture++;
     else if (change === '有采购需求') salesMap[sales].demand++;
     else if (change === '已达成交易') salesMap[sales].deal++;
@@ -42111,7 +41973,7 @@ function renderDashboard() {
     const lead = leadMap[lid];
     const reg = lead ? (lead[L_REG2] || '未分配') : '未关联';
     const change = (r[C_CH] || '').trim();
-    const dlFilled = fupDeadlineFilled(r);
+    const dlFilled = C_DL >= 0 && (r[C_DL] || '').trim() !== '';
     if (!regMap[reg]) regMap[reg] = {tot:0, done:0, pending:0, noCh:0};
     regMap[reg].tot++;
     if (FUP_PENDING_CHANGES.includes(change)) regMap[reg].pending++;
@@ -42139,9 +42001,6 @@ function renderDashboard() {
     .sort((a,b)=> (b.leads-a.leads) || (b.fups-a.fups)).slice(0,10);
   const maxIndLeads = Math.max(1,...indRows.map(x=>x.leads));
   const maxIndFups = Math.max(1,...indRows.map(x=>x.fups));
-  // 两条统一标尺：按「两个口径的最大值」归一化，条长直接反映数量多少、可横向比较
-  // （此前两条各自按自身最大值归一化，只体现口径内排名 —— 会出现 281 条的蓝条短于 36 条绿条的误导）
-  const indMax = Math.max(1, maxIndLeads, maxIndFups);
 
   // ===== 活动来源分析（线索池总数 + 跟进记录数据） =====
   const actLeadsMap = {};
@@ -42160,7 +42019,7 @@ function renderDashboard() {
     const lead = leadMap[lid];
     const act = lead ? (lead[L_ACT] || '未知') : '未关联';
     const change = (r[C_CH] || '').trim();
-    const dlFilled = fupDeadlineFilled(r);
+    const dlFilled = C_DL >= 0 && (r[C_DL] || '').trim() !== '';
     if (!actFupMap[act]) actFupMap[act] = {fupTotal:0, pending:0, done:0, noCh:0, demand:0};
     actFupMap[act].fupTotal++;
     if (FUP_PENDING_CHANGES.includes(change)) actFupMap[act].pending++;
@@ -42193,7 +42052,7 @@ function renderDashboard() {
     const lead = leadMap[lid];
     const src = lead ? (lead[L_SRC] || '未知') : '未关联';
     const change = (r[C_CH] || '').trim();
-    const dlFilled = fupDeadlineFilled(r);
+    const dlFilled = C_DL >= 0 && (r[C_DL] || '').trim() !== '';
     if (!srcFupMap[src]) srcFupMap[src] = {fupTotal:0, pending:0, done:0, noCh:0, demand:0};
     srcFupMap[src].fupTotal++;
     if (FUP_PENDING_CHANGES.includes(change)) srcFupMap[src].pending++;
@@ -42273,11 +42132,11 @@ function renderDashboard() {
 
   <!-- ====== 各销售跟进效果分析（基于跟进记录） ====== -->
   <div class="panel dash-full">
-    <div class="title">👤 各销售 MQLs 效果分析 <span style="font-size:10px;color:var(--text3);font-weight:400">（全部 ${fupsData.length} 条；待跟进=阶段变化为继续沟通培养/有采购需求，已处理=跟进记录与阶段变化均已填）</span></div>
+    <div class="title">👤 各销售 MQLs 效果分析 <span style="font-size:10px;color:var(--text3);font-weight:400">（全部 ${fupsData.length} 条；待跟进=阶段变化为继续沟通培养/有采购需求，已处理=09.14与阶段变化均已填）</span></div>
     <table>
       <thead><tr>
         <th>销售</th><th>MQLs 数</th><th>已处理</th><th>处理率</th>
-        <th>待跟进</th><th>待补跟进</th><th>继续沟通</th><th>明确需求</th><th>已达成交易</th><th>无效/流失</th>
+        <th>待跟进</th><th>待补跟进内容</th><th>继续沟通</th><th>明确需求</th><th>已达成交易</th><th>无效/流失</th>
       </tr></thead>
       <tbody>
         ${sortedSales.map(([s, d]) => {
@@ -42296,14 +42155,31 @@ function renderDashboard() {
         }).join('')}
       </tbody>
     </table>
-    <div style="font-size:10px;color:var(--text3);margin-top:6px">待跟进=继续沟通培养+有采购需求 · 已处理=跟进记录与阶段变化均已填 · 待补跟进=跟进记录为空 · 阶段变化各列独立统计（互相可重叠）</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:6px">待跟进=继续沟通培养+有采购需求 · 已处理=09.14与阶段变化均已填 · 待补跟进内容=09.14未填 · 阶段变化各列独立统计（互相可重叠）</div>
+  </div>
+
+  <!-- ====== 流失原因细分（基于跟进记录） ====== -->
+  <div class="panel">
+    <div class="title">🚫 流失/回收原因细分（${lost} 条流失线索，${lostReasonMap.size ? Object.values(lostReasonMap).reduce((s,x)=>s+x.cnt,0) : 0} 次标记）</div>
+    <div class="bar-chart">
+      ${sortedReasons.map(([reason,d])=>{
+        const p=maxReason>0?d.cnt/maxReason*100:0;
+        const lp=lost>0?(d.ld.size/lost*100).toFixed(1):0;
+        return `<div class="bar-row">
+          <span class="bar-label" style="width:100px">${h(reason.length>10?reason.substr(0,9)+'…':reason)}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:#EF4444"></div></div>
+          <span class="bar-val" style="width:auto">${d.cnt}次 (涉${d.ld.size}条 ${lp}%)</span>
+        </div>`;
+      }).join('')}
+    </div>
+    ${sortedReasons.length === 0 ? '<p style="color:var(--text3);font-size:12px;text-align:center;padding:8px">暂无流失线索的 MQLs 分析</p>' : ''}
   </div>
 
   <!-- ====== 各大区跟进情况（基于跟进记录） ====== -->
   <div class="panel">
-    <div class="title">🗺 各大区 MQLs 情况 <span style="font-size:10px;color:var(--text3);font-weight:400">（全部 ${fupsData.length} 条；待跟进=阶段变化为继续沟通培养/有采购需求，已处理=跟进记录与阶段变化均已填）</span></div>
+    <div class="title">🗺 各大区 MQLs 情况 <span style="font-size:10px;color:var(--text3);font-weight:400">（全部 ${fupsData.length} 条；待跟进=阶段变化为继续沟通培养/有采购需求，已处理=09.14与阶段变化均已填）</span></div>
     <table>
-      <thead><tr><th>大区</th><th>MQLs 数</th><th>已处理</th><th>待跟进</th><th>待补跟进</th><th>处理率</th></tr></thead>
+      <thead><tr><th>大区</th><th>MQLs 数</th><th>已处理</th><th>待跟进</th><th>待补跟进内容</th><th>处理率</th></tr></thead>
       <tbody>
         ${Object.entries(regMap).sort((a,b)=>b[1].tot-a[1].tot).map(([r,d])=>{
           const rate=d.tot>0?(d.done/d.tot*100).toFixed(1):0;
@@ -42368,18 +42244,17 @@ function renderDashboard() {
   </div>
 
   <!-- ====== 行业分布（合并双口径：市场留资清单 + MQLs） ====== -->
-  <div class="panel panel-fill">
+  <div class="panel">
     <div class="title">🏭 行业分布 TOP 10 <span style="font-size:10px;color:var(--text3);font-weight:400">（市场留资清单 ${total} 条 · MQLs ${filteredFups.length} 条）</span></div>
     <div style="font-size:11px;color:var(--text2);margin:2px 0 8px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px">
       <span class="dual-legend"><i class="dual-swatch" style="background:#378ADD"></i>上 · 蓝 = 市场留资清单</span>
       <span class="dual-legend"><i class="dual-swatch" style="background:var(--green)"></i>下 · 绿 = MQLs</span>
-      <span style="color:var(--text3);font-size:10px">两条同一标尺，条长可直接比大小</span>
+      <span style="color:var(--text3);font-size:10px">两条各自按自身最大值归一化</span>
     </div>
-    <div class="bar-chart dual-chart">
+    <div class="bar-chart">
       ${indRows.map(({ind,leads,fups})=>{
-        // 统一标尺；数量 > 0 时保底 1.5% 宽度，避免极小值完全看不见
-        const pl=leads>0?Math.max(1.5, leads/indMax*100):0;
-        const pf=fups>0?Math.max(1.5, fups/indMax*100):0;
+        const pl=maxIndLeads>0?leads/maxIndLeads*100:0;
+        const pf=maxIndFups>0?fups/maxIndFups*100:0;
         return `<div class="bar-row" title="${h(ind)}：市场留资 ${leads} 条 · MQLs ${fups} 条">
           <span class="bar-label" style="width:110px">${h(ind.length>13?ind.substr(0,12)+'…':ind)}</span>
           <div class="bar-dual">
@@ -42390,7 +42265,7 @@ function renderDashboard() {
         </div>`;
       }).join('')}
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-top:8px">数值 = 市场留资 <b style="color:#378ADD">蓝</b> / MQLs <b style="color:var(--green)">绿</b>，两条<b>共用同一标尺</b>（按两口径最大值 ${indMax} 归一化），故条长即数量多少 · 行业取「市场留资 TOP10」与「MQLs TOP10」的并集，按市场留资数降序取前 10</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px">数值 = 市场留资 <b style="color:#378ADD">蓝</b> / MQLs <b style="color:var(--green)">绿</b> · 行业取「市场留资 TOP10」与「MQLs TOP10」的并集，按市场留资数降序取前 10</div>
     ${indRows.length === 0 ? '<p style="color:var(--text3);font-size:12px;text-align:center;padding:8px">暂无行业数据</p>' : ''}
   </div>
 
@@ -42408,23 +42283,6 @@ function renderDashboard() {
       }).join('')}
     </div>
   </div>
-  <!-- ====== 流失原因细分（基于跟进记录） ====== -->
-  <div class="panel">
-    <div class="title">🚫 流失/回收原因细分（${lost} 条流失线索，${lostReasonMap.size ? Object.values(lostReasonMap).reduce((s,x)=>s+x.cnt,0) : 0} 次标记）</div>
-    <div class="bar-chart">
-      ${sortedReasons.map(([reason,d])=>{
-        const p=maxReason>0?d.cnt/maxReason*100:0;
-        const lp=lost>0?(d.ld.size/lost*100).toFixed(1):0;
-        return `<div class="bar-row">
-          <span class="bar-label" style="width:100px">${h(reason.length>10?reason.substr(0,9)+'…':reason)}</span>
-          <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:#EF4444"></div></div>
-          <span class="bar-val" style="width:auto">${d.cnt}次 (涉${d.ld.size}条 ${lp}%)</span>
-        </div>`;
-      }).join('')}
-    </div>
-    ${sortedReasons.length === 0 ? '<p style="color:var(--text3);font-size:12px;text-align:center;padding:8px">暂无流失线索的 MQLs 分析</p>' : ''}
-  </div>
-
 </div>
 <div class="footer">数据实时保存 · 市场留资=${total}条 · MQLs=${followed}条 · 待跟进=${pendingFups}条 · 已处理=${doneFupCount}条 · SQL=${sql} · 流失=${lost}条 · MQLs记录=${fupsData.length}条 · 最近刷新：${new Date().toLocaleTimeString('zh-CN')}</div>`;
   document.getElementById('mainContent').innerHTML = html;
@@ -42495,7 +42353,7 @@ function mselChange(key, val, checked) {
 
 // ---- 最近跟进内容查询（线索编号 → 跟进日期最新的那条跟进内容）----
 function latestFupContent(leadId) {
-  const C_LD = fupCol('线索编号', 1), C_CT = fupFirstCol(), C_DT = fupCol('跟进日期', 2);
+  const C_LD = fupCol('线索编号', 1), C_CT = fupCol('跟进内容', 4), C_DT = fupCol('跟进日期', 2);
   let best = null, bestDate = '';
   const id = (leadId || '').trim();
   if (!id) return '';
@@ -42507,17 +42365,7 @@ function latestFupContent(leadId) {
     const dt = (f[C_DT] || '').trim();
     if (!best || dt >= bestDate) { best = ct; bestDate = dt; }
   }
-  if (best) return best;
-  // 降级：该线索所有「跟进记录」子项里取最后一条内容（首次跟进为空时仍能展示最近进展）
-  let fallback = '';
-  const C_RC = fupRecCol();
-  for (let j = 0; j < fupsData.length; j++) {
-    const f = fupsData[j];
-    if (!f || (f[C_LD] || '').trim() !== id) continue;
-    const items = fupRecords(f, C_RC);
-    if (items.length) fallback = items[items.length - 1].t || fallback;
-  }
-  return fallback;
+  return best || '';
 }
 function truncateStr(s, n) {
   s = (s || '').trim();
@@ -42681,8 +42529,8 @@ function clearFupFilters() {
 
 function renderFollowups() {
   // 动态解析列索引（自定义列插入/删除后仍能正确定位）
-  const C_LD = fupCol('线索编号', 1), C_CH = fupCol('阶段变化', 12), C_OW = fupCol('负责人', 14);
-  const C_DT = fupCol('跟进日期', 2), C_MT = fupCol('跟进方式', 3), C_CT = fupFirstCol();
+  const C_LD = fupCol('线索编号', 1), C_CH = fupCol('阶段变化', 12), C_OW = fupCol('负责人', 13);
+  const C_DT = fupCol('跟进日期', 2), C_MT = fupCol('跟进方式', 3), C_CT = fupCol('跟进内容', 4);
   const C_MDL = fupCol('产品型号意向', 6), C_AMT = fupCol('预计成交金额(万)', 10), C_PL = fupCol('下一步计划', 13);
   let filtered = fupsData;
   const salesSet = new Set();
@@ -42704,8 +42552,7 @@ function renderFollowups() {
     const kw = fupFilterContent.toLowerCase();
     filtered = filtered.filter(r => {
       const lead = leadMap[(r[C_LD]||'').trim()];
-      const recTexts = fupRecords(r, fupRecCol()).map(function(x){ return x.t; }).join(' ');
-      const fields = [r[C_CT],recTexts,r[C_MDL],r[C_AMT],r[C_PL],lead?lead[L_CNAME2]:'',lead?lead[L_CONTACT2]:''].join(' ').toLowerCase();
+      const fields = [r[C_CT],r[C_MDL],r[C_AMT],r[C_PL],lead?lead[L_CNAME2]:'',lead?lead[L_CONTACT2]:''].join(' ').toLowerCase();
       return fields.includes(kw);
     });
   }
@@ -42716,7 +42563,7 @@ function renderFollowups() {
   ${isSales() ? '' : '<label>负责人：</label>' + mselHtml('fupSales', fupSalesList)}
   <label>方式：</label>${mselHtml('fupMethod', METHOD_OPTIONS)}
   <label>阶段变化：</label>${mselHtml('fupStage', STAGE_CHANGE)}
-  <label>内容检索：</label><input value="${h(fupFilterContent)}" oninput="fupFilterContent=this.value;debounceFupRender()" placeholder="首次跟进/跟进记录/客户/联系人/产品/金额/计划" style="width:180px">
+  <label>内容检索：</label><input value="${h(fupFilterContent)}" oninput="fupFilterContent=this.value;debounceFupRender()" placeholder="跟进内容/客户/联系人/产品/金额/计划" style="width:180px">
   <button class="small" onclick="clearFupFilters()" title="清除所有筛选">重置</button>
 </div>`;
 
@@ -42733,38 +42580,20 @@ function renderFollowups() {
         tds += `<td data-fup-cd="${origIdx}" data-cd-state="${cdInfo.state}" style="text-align:center">${cdInfo.html}</td>`;
         tds += `<td style="text-align:center">${isAdmin() ? `<button class="danger small" onclick="event.stopPropagation();deleteFupRow(${origIdx})" title="删除此条跟进记录">✕</button>` : '<span style="color:var(--text3);font-size:11px" title="仅管理员可删除跟进记录">—</span>'}</td>`;
       } else if (hd === '线索编号') {
-        // 点击线索编号 → 打开详情弹窗（原「跳转线索池」改为弹窗内的按钮）
-        // ⚠️ 必须保留 editable：线索编号支持 inline 编辑，Delete 键的主键保护分支也走这条路径
-        tds += `<td data-col="${ci}" class="fup-leadcell editable">${fupCellHtml(hd, val, origIdx)}</td>`;
+        tds += `<td data-col="${ci}"><a class="lead-link" href="javascript:void(0)" onclick="event.stopPropagation();jumpToLeadByIdx(${origIdx})" style="color:var(--blue);text-decoration:underline;cursor:pointer" title="点击跳转到线索池">${h(val)}</a></td>`;
         // 虚拟列：客户名称(脱敏) + 联系人（实时取自线索池，不占数据列）
         const lead = leadMap[(val || '').trim()];
-        // 客户名称为长文本列，与「下一步计划」同宽且自动换行；联系人保持窄列
-        tds += `<td class="fup-ghost fup-wide" title="${lead?h(lead[L_CNAME2]||''):''}">${lead ? `<span class="fup-ghost-link" onclick="event.stopPropagation();openFupDetail(${origIdx})" title="点击查看该线索完整信息">${h(lead[L_CNAME2] || '—')}</span>` : '<span class="fup-ghost-dim">未关联</span>'}</td>`;
-        tds += `<td class="fup-ghost" title="${lead?h(lead[L_CONTACT2]||''):''}">${lead ? `<span class="fup-ghost-link" onclick="event.stopPropagation();openFupDetail(${origIdx})" title="点击查看该线索完整信息">${h(lead[L_CONTACT2] || '—')}</span>` : '<span class="fup-ghost-dim">—</span>'}</td>`;
-      } else if (hd === '跟进记录') {
-        // 跟进记录：显示子项条数 + 最新一条（日期 + 内容预览），点击打开详情弹窗编辑子项
-        const items = fupRecords(r, ci);
-        const cnt = items.length;
-        let inner = '<span class="fup-ghost-dim">—</span>';
-        if (cnt) {
-          const last = items[items.length - 1];
-          inner = '<span class="fup-rec-n">' + cnt + ' 条</span>'
-            + (last.d ? '<span class="fup-rec-d">' + h(last.d.slice(-5)) + '</span>' : '')
-            + '<span class="fup-rec-t">' + h(truncateStr(last.t || '(无内容)', 60)) + '</span>';
-        }
-        tds += '<td class="fup-wide fup-rec" data-col="' + ci + '" onclick="event.stopPropagation();openFupDetail(' + origIdx + ')" title="点击查看/编辑完整跟进记录">' + inner + '</td>';
+        tds += `<td class="fup-ghost" style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px" title="${lead?h(lead[L_CNAME2]||''):''}">${lead ? h(lead[L_CNAME2] || '—') : '<span style="color:var(--text3)">未关联</span>'}</td>`;
+        tds += `<td class="fup-ghost" style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px" title="${lead?h(lead[L_CONTACT2]||''):''}">${lead ? h(lead[L_CONTACT2] || '—') : '<span style="color:var(--text3)">—</span>'}</td>`;
       } else if (hd === '跟进方式') {
-        tds += `<td class="editable" data-col="${ci}" data-type="select" data-options="${METHOD_OPTIONS.join(',')}">${fupCellHtml(hd, val, origIdx)}</td>`;
+        tds += `<td class="editable" data-col="${ci}" data-type="select" data-options="${METHOD_OPTIONS.join(',')}">${h(val)}</td>`;
       } else if (hd === '预算确认') {
-        tds += `<td class="editable" data-col="${ci}" data-type="select" data-options="${BUDGET_CONFIRM.join(',')}">${fupCellHtml(hd, val, origIdx)}</td>`;
+        tds += `<td class="editable" data-col="${ci}" data-type="select" data-options="${BUDGET_CONFIRM.join(',')}">${h(val)}</td>`;
       } else if (hd === '阶段变化') {
-        tds += `<td class="editable" data-col="${ci}" data-type="select" data-options="${STAGE_CHANGE.join(',')}">${fupCellHtml(hd, val, origIdx)}</td>`;
+        tds += `<td class="editable" data-col="${ci}" data-type="select" data-options="${STAGE_CHANGE.join(',')}">${h(val)}</td>`;
       } else if (hd === '负责人') {
         // 负责人下拉按角色裁剪：admin 全量；region/sales 限本大区成员（服务端同样强制校验）
-        tds += `<td class="editable" data-col="${ci}" data-type="select" data-options="${h((isAdmin() ? fupSalesList : ownerChoices()).join(','))}">${h(val)}</td>`;
-      } else if (FUP_WIDE_FUP_COLS.indexOf(hd) >= 0) {
-        // 长文本列（首次跟进 / 下一步计划）：与「下一步计划」同宽，超长自动换行
-        tds += `<td class="editable fup-wide" data-col="${ci}">${h(val)}</td>`;
+        tds += `<td class="editable" data-col="${ci}" data-type="select" data-options="${(isAdmin() ? fupSalesList : ownerChoices()).join(',')}">${h(val)}</td>`;
       } else {
         tds += `<td class="editable" data-col="${ci}">${h(val)}</td>`;
       }
@@ -42779,16 +42608,15 @@ function renderFollowups() {
     + FUP_HEADERS.map((hd, i) => {
     if (hd === '操作') {
       // 虚拟列：48小时跟进时限（不写入数据表头）
-      return '<th style="width:120px;text-align:center" title="跟进日期起48小时内需填写「跟进记录」，超时未填写整行标红">⏱ 48h时限</th><th style="width:50px;text-align:center">操作</th>';
+      return '<th style="width:120px;text-align:center" title="跟进日期起48小时内需填写「'+h(fupDeadlineContentIdx()>=0?FUP_HEADERS[fupDeadlineContentIdx()]:'跟进内容')+'」列，超时未填写整行标红">⏱ 48h时限</th><th style="width:50px;text-align:center">操作</th>';
     }
     if (hd === '线索编号') {
-      // 虚拟列：客户名称/联系人（实时取自线索池）；客户名称为长文本列，与「下一步计划」同宽
-      return '<th style="min-width:90px">'+h(hd)+'</th><th class="fup-wide" style="width:'+FUP_WIDE_PX+'px;text-align:center" title="自动带入市场留资清单的客户名称(脱敏)">👤 客户名称</th><th style="width:100px;text-align:center" title="自动带入市场留资清单的联系人">🧑 联系人</th>';
+      // 虚拟列：客户名称/联系人（实时取自线索池）
+      return '<th style="min-width:90px">'+h(hd)+'</th><th style="width:140px;text-align:center" title="自动带入市场留资清单的客户名称(脱敏)">👤 客户名称</th><th style="width:100px;text-align:center" title="自动带入市场留资清单的联系人">🧑 联系人</th>';
     }
     const delBtn = !FUP_DEFAULT_HEADERS.includes(hd)
       ? `<span class="col-del" onclick="event.stopPropagation();removeColumn('followups',${i})" title="删除此列">✕</span>` : '';
-    // 长文本列（首次跟进 / 跟进记录 / 下一步计划）统一加宽，超长自动换行
-    return `<th${FUP_WIDE_FUP_COLS.indexOf(hd) >= 0 ? ' class="fup-wide"' : ''}><span class="th-edit" contenteditable="true" data-tab="followups" data-col="${i}" spellcheck="false">${h(hd)}</span>${delBtn}</th>`;
+    return `<th><span class="th-edit" contenteditable="true" data-tab="followups" data-col="${i}" spellcheck="false">${h(hd)}</span>${delBtn}</th>`;
   }).join('');
 
   const dynHtml = `
@@ -42804,9 +42632,9 @@ function renderFollowups() {
   <button class="small" onclick="addColumn('followups')" title="指定位置添加新列">+ 添加列</button>
   <span style="font-size:11px;color:var(--text3)">共 ${FUP_HEADERS.length} 列（系统 ${FUP_HEADERS.filter(hd=>FUP_DEFAULT_HEADERS.includes(hd)).length} + 自定义 ${FUP_HEADERS.filter(hd=>!FUP_DEFAULT_HEADERS.includes(hd)).length}）</span>
 </div>
-<div class="table-wrap fup-list">
-  <table class="fup-table">
-    <colgroup><col style="width:36px">${FUP_HEADERS.map(hd=>hd==='线索编号'?('<col style="min-width:90px"><col style="width:'+FUP_WIDE_PX+'px"><col style="width:100px">'):(hd==='操作'?'<col style="width:120px"><col style="width:50px">':(FUP_WIDE_FUP_COLS.indexOf(hd)>=0?('<col style="width:'+FUP_WIDE_PX+'px">'):'<col>'))).join('')}</colgroup>
+<div class="table-wrap">
+  <table>
+    <colgroup><col style="width:36px">${FUP_HEADERS.map(hd=>hd==='线索编号'?'<col style="min-width:90px"><col style="width:140px"><col style="width:100px">':(hd==='操作'?'<col style="width:120px"><col style="width:50px">':'<col>')).join('')}</colgroup>
     <thead><tr>${fupHeaderHtml}</tr></thead>
     <tbody>${rows}</tbody>
   </table>
@@ -42827,521 +42655,16 @@ function renderFollowups() {
 
 // ============================================================
 // 48小时跟进时限倒计时（虚拟列，不写入数据表头）
-// 起算：跟进日期（当天00:00）+48小时；达标：「跟进记录」列已有 ≥1 条子项
+// 起算：跟进日期（当天00:00）+48小时；达标：名称含"跟进内容"的自定义列已填写
 // ============================================================
-
-// ============================================================
-// MQLs / 跟进记录详情弹窗（点击线索编号 / 客户名称 / 联系人打开）
-// ============================================================
-
-// 胶囊配色映射：有采购需求/已达成交易 → 绿；继续沟通培养 → 蓝；未联系上 → 橙；无效类 → 灰
-const FUP_PILL_COLORS = {
-  '有采购需求': '#10B981', '已达成交易': '#10B981', '已确认': '#10B981',
-  '继续沟通培养': '#378ADD',
-  '未联系上': '#F59E0B', '待确认': '#F59E0B',
-  '无采购需求': '#94A3B8', '非目标客户': '#94A3B8', '无效数据': '#94A3B8', '未提及': '#94A3B8'
-};
-// 需要渲染成胶囊的列（按表头名匹配，用户改名/增删自定义列后不影响判定）
-const FUP_PILL_COLS = ['跟进方式', '预算确认', '阶段变化'];
-
-// 长文本列统一宽度（px）——需求七：客户名称 / 首次跟进 / 跟进记录 / 下一步计划 同宽且自动换行
-const FUP_WIDE_PX = 240;
-const FUP_WIDE_FUP_COLS = ['首次跟进', '跟进记录', '下一步计划'];
-
-/** 「跟进记录」列索引（单元格存 JSON 子项数组字符串）；按名解析，解析不到退回 5 */
-function fupRecCol() { return fupCol('跟进记录', 5); }
-/** 「首次跟进」列索引（原「跟进内容」，纯文本）；按名解析，解析不到退回 4 */
-function fupFirstCol() { return fupCol('首次跟进', 4); }
-
-/**
- * 解析「跟进记录」子项 JSON。兼容旧纯文本值（视为一条无日期子项），非法/空返回 []。
- * @param {Array} row 跟进记录行
- * @param {number} [ci] 列索引，缺省用 fupRecCol()
- * @returns {{d:string,t:string}[]} 子项数组（保证元素字段齐全，永不返回 null）
- */
-function fupRecords(row, ci) {
-  if (!row) return [];
-  const idx = (typeof ci === 'number' && ci >= 0) ? ci : fupRecCol();
-  if (idx < 0) return [];
-  const raw = row[idx];
-  if (raw === null || raw === undefined) return [];
-  const s = String(raw).trim();
-  if (!s) return [];
-  if (s.charAt(0) === '[') {
-    try {
-      const parsed = JSON.parse(s);
-      if (Array.isArray(parsed)) {
-        return parsed.map(function(it) {
-          if (it && typeof it === 'object') return { d: String(it.d || ''), t: String(it.t || '') };
-          return { d: '', t: String(it === null || it === undefined ? '' : it) };
-        });
-      }
-    } catch (e) { /* 非法 JSON → 按纯文本降级 */ }
-  }
-  // 旧值（纯文本）→ 视为一条无日期子项
-  return [{ d: '', t: s }];
+function fupDeadlineContentIdx() {
+  // 定位判定列：除系统列"跟进内容"外，第一个名称以"跟进内容"开头的自定义列（如"跟进内容09.14"）
+  return FUP_HEADERS.findIndex(hd => hd !== '跟进内容' && hd.indexOf('跟进内容') === 0);
 }
-
-/**
- * 把子项数组写回行的「跟进记录」列（空数组写 ''），统一 JSON.stringify
- * @param {Array} row 跟进记录行
- * @param {{d:string,t:string}[]} arr 子项数组
- * @param {number} [ci] 列索引，缺省用 fupRecCol()
- */
-function fupRecordsSet(row, arr, ci) {
-  if (!row) return;
-  const idx = (typeof ci === 'number' && ci >= 0) ? ci : fupRecCol();
-  if (idx < 0) return;
-  const list = Array.isArray(arr) ? arr : [];
-  const clean = list
-    .map(function(it) { return { d: String((it && it.d) || ''), t: String((it && it.t) || '') }; })
-    .filter(function(it) { return it.d.trim() !== '' || it.t.trim() !== ''; });
-  row[idx] = clean.length ? JSON.stringify(clean) : '';
-}
-
-/**
- * 从旧列名（如「跟进内容09.14」）尾部解析月日，结合该行跟进日期年份生成 YYYY-MM-DD
- * @param {string} colName 旧列名
- * @param {string} rowDate 该行跟进日期（YYYY-MM-DD）
- * @returns {string} YYYY-MM-DD，解析不出则返回 ''
- */
-function fupRecDateFromColName(colName, rowDate) {
-  const name = String(colName || '');
-  const m = name.match(/(\d{1,2})[.\-/](\d{1,2})/);
-  let yy = '';
-  const dm = String(rowDate || '').match(/^(\d{4})-/);
-  if (dm) yy = dm[1];
-  else yy = String(new Date().getFullYear());
-  if (!m) return '';
-  const mm = String(parseInt(m[1], 10)).padStart(2, '0');
-  const dd = String(parseInt(m[2], 10)).padStart(2, '0');
-  if (+mm < 1 || +mm > 12 || +dd < 1 || +dd > 31) return '';
-  return yy + '-' + mm + '-' + dd;
-}
-
-/**
- * 一次性迁移（幂等）：旧双列 → 首次跟进 + 跟进记录(JSON)
- * - 「跟进内容」→ 改名「首次跟进」（数据不动）
- * - 「跟进内容09.14」→ 改名「跟进记录」，非空旧值按列名尾部 MM.DD 转成 {d:'YYYY-MM-DD',t:原值} 后 JSON 化
- * - 若既无「跟进内容09.14」也无「跟进记录」，则在「首次跟进」之后插入一列「跟进记录」（所有行同位置补 ''）
- * - 幂等：row[ci] 已是可解析 JSON 数组、且表头已含「跟进记录」时跳过
- * @returns {boolean} 是否发生了变更
- */
-function fupMigrateToRecords() {
-  if (!Array.isArray(FUP_HEADERS) || !FUP_HEADERS.length) return false;
-  const C_DT = fupCol('跟进日期', 2);
-  let changed = false;
-
-  // 1. 「跟进内容」→「首次跟进」（原地改名，数据不动）
-  const oldFirstIdx = FUP_HEADERS.indexOf('跟进内容');
-  if (oldFirstIdx >= 0 && FUP_HEADERS.indexOf('首次跟进') < 0) {
-    FUP_HEADERS[oldFirstIdx] = '首次跟进';
-    changed = true;
-  }
-
-  // 2. 定位旧的「跟进内容MM.DD」自定义列（第一个非「跟进内容」本身、以「跟进内容」开头的列）
-  let oldRecIdx = -1;
-  for (let i = 0; i < FUP_HEADERS.length; i++) {
-    const hd = FUP_HEADERS[i];
-    if (hd !== '跟进内容' && hd !== '首次跟进' && String(hd).indexOf('跟进内容') === 0) { oldRecIdx = i; break; }
-  }
-
-  let recIdx = FUP_HEADERS.indexOf('跟进记录');
-  if (recIdx < 0 && oldRecIdx >= 0) {
-    // 3a. 旧的「跟进内容09.14」列 → 改名为「跟进记录」并把纯文本转成 JSON 子项
-    recIdx = oldRecIdx;
-    const oldName = String(FUP_HEADERS[recIdx] || '');   // 必须在改名之前取，用于解析 09.14
-    FUP_HEADERS[recIdx] = '跟进记录';
-    fupsData.forEach(function(r) {
-      if (!r) return;
-      const oldVal = String(r[recIdx] === null || r[recIdx] === undefined ? '' : r[recIdx]).trim();
-      if (!oldVal) { r[recIdx] = ''; return; }
-      let d = fupRecDateFromColName(oldName, r[C_DT]);
-      if (!d) d = String(r[C_DT] || '').trim();
-      r[recIdx] = JSON.stringify([{ d: d, t: oldVal }]);
-    });
-    changed = true;
-  } else if (recIdx < 0) {
-    // 3b. 既无旧列也无新列 → 在「首次跟进」之后插入「跟进记录」列
-    const firstIdx = FUP_HEADERS.indexOf('首次跟进');
-    const at = firstIdx >= 0 ? firstIdx + 1 : FUP_HEADERS.length;
-    FUP_HEADERS.splice(at, 0, '跟进记录');
-    recIdx = at;
-    fupsData.forEach(function(r) { if (r) r.splice(at, 0, ''); });
-    changed = true;
-  }
-  return changed;
-}
-
-/** 取胶囊背景色，未命中的值统一用中性蓝灰 */
-function fupPillColor(val) {
-  return FUP_PILL_COLORS[String(val === null || val === undefined ? '' : val).trim()] || '#64748B';
-}
-
-/**
- * 跟进记录单元格内容渲染 —— 行渲染 与 finishEdit 回写 共用，
- * 保证编辑完成后胶囊标签 / 线索编号链接不会被降级成纯文本。
- * @param {string} hd 列头名称
- * @param {*} val 单元格值
- * @param {number} rowIdx 在 fupsData 中的行索引
- * @returns {string} 已转义的 HTML 片段
- */
-function fupCellHtml(hd, val, rowIdx) {
-  const v = (val === null || val === undefined) ? '' : String(val);
-  const idx = parseInt(rowIdx, 10);
-  const ri = isNaN(idx) ? 0 : idx;
-  if (hd === '线索编号') {
-    if (!v.trim()) return '<span class="fup-ghost-dim">—</span>';
-    return '<span class="fup-title" onclick="event.stopPropagation();openFupDetail(' + ri + ')" title="点击查看该线索完整信息">' + h(v) + '</span>';
-  }
-  if (hd === '跟进记录') {
-    // 与行渲染同口径：条数 + 最新一条预览（不含 <td>，供 finishEdit 回写复用）
-    // fupCellHtml 不接收列索引，这里用 fupRecCol() 构造一个单行数组再复用 fupRecords
-    const rcIdx = fupRecCol();
-    const tmpRow = [];
-    if (rcIdx >= 0) tmpRow[rcIdx] = v;
-    const items = fupRecords(tmpRow, rcIdx);
-    const cnt = items.length;
-    if (!cnt) return '<span class="fup-ghost-dim">—</span>';
-    const last = items[items.length - 1];
-    return '<span class="fup-rec-n">' + cnt + ' 条</span>'
-      + (last.d ? '<span class="fup-rec-d">' + h(last.d.slice(-5)) + '</span>' : '')
-      + '<span class="fup-rec-t">' + h(truncateStr(last.t || '(无内容)', 60)) + '</span>';
-  }
-  if (FUP_PILL_COLS.indexOf(hd) >= 0) {
-    if (!v.trim()) return '';
-    return '<span class="fup-pill" style="background:' + fupPillColor(v) + '">' + h(v) + '</span>';
-  }
-  return h(v);
-}
-
-/**
- * 详情弹窗「负责人」下拉选项：admin 用全量名单，其余走 ownerChoices()
- * （与列表列渲染同口径，服务端会强制把 sales 的 owner 锁回本人）
- * @returns {string[]} 可选负责人列表
- */
-function fupDetailOwners() {
-  if (!isAdmin()) return ownerChoices();
-  const C_OW = fupCol('负责人', 14);
-  const set = new Set();
-  fupsData.forEach(function(r) { if (r && r[C_OW]) set.add(r[C_OW]); });
-  SALES_LIST.forEach(function(s) { set.add(s); });
-  return Array.from(set).sort();
-}
-
-/**
- * 生成详情弹窗里的下拉控件 HTML，元素 id 统一为 fd_<colIdx>
- * @param {number} colIdx 列索引
- * @param {string[]} options 选项列表
- * @param {*} val 当前值
- * @param {boolean} disabled 是否禁用
- * @returns {string} HTML 片段
- */
-function fdSelectHtml(colIdx, options, val, disabled) {
-  const list = options || [];
-  const v = String(val === null || val === undefined ? '' : val).trim();
-  let opts = '<option value="">— 请选择 —</option>';
-  // 当前值不在选项内时补到列表头部，避免保存时丢失原值
-  if (v && list.indexOf(v) < 0) opts += '<option value="' + h(v) + '" selected>' + h(v) + '</option>';
-  list.forEach(function(o) {
-    opts += '<option value="' + h(o) + '"' + (o === v ? ' selected' : '') + '>' + h(o) + '</option>';
-  });
-  return '<select id="fd_' + colIdx + '" class="form-control"' + (disabled ? ' disabled' : '') + '>' + opts + '</select>';
-}
-
-/**
- * 按线索编号在 leadsData 中精确匹配关联线索行
- * @param {string} leadId 线索编号
- * @returns {Array|null} 线索行或 null
- */
-function fupFindLead(leadId) {
-  const id = String(leadId === null || leadId === undefined ? '' : leadId).trim().toLowerCase();
-  if (!id) return null;
-  const C_LID = leadCol('线索编号', 0);
-  for (let i = 0; i < leadsData.length; i++) {
-    const row = leadsData[i];
-    if (row && String(row[C_LID] || '').trim().toLowerCase() === id) return row;
-  }
-  return null;
-}
-
-/** 关闭跟进记录详情弹窗 */
-function closeFupDetail() {
-  const m = document.getElementById('fupDetailModal');
-  if (m) m.remove();
-}
-
-/**
- * 详情弹窗内「🗑 删除此条」：删除成功才关闭弹窗；
- * 用户在 confirm 中取消（或无权限）时保持弹窗打开，避免出现「弹窗没了但也没删」的中间态。
- * 确认提示复用 deleteFupRow 自身的一次 confirm，不重复弹窗。
- * @param {number} rowIdx 在 fupsData 中的行索引
- */
-function deleteFupFromDetail(rowIdx) {
-  if (!deleteFupRow(rowIdx)) return;   // 取消删除 / 无权限 → 弹窗保持打开
-  closeFupDetail();
-}
-
-/**
- * 打开跟进记录详情弹窗：线索基本信息（只读）+ 本次跟进信息（可编辑）
- * + 下一步计划新增 + 跟进历史
- * @param {number} rowIdx 在 fupsData 中的行索引
- */
-function openFupDetail(rowIdx) {
-  rowIdx = parseInt(rowIdx, 10);
-  const r = fupsData[rowIdx];
-  if (!r) { toast('未找到该跟进记录', 'err'); return; }
-
-  const C_ID = fupCol('跟进编号', 0);
-  const C_LD = fupCol('线索编号', 1);
-  const C_DT = fupCol('跟进日期', 2);
-  const C_MT = fupCol('跟进方式', 3);
-  const C_CT = fupFirstCol();
-  const C_CH = fupCol('阶段变化', 12);
-  const C_PL = fupCol('下一步计划', 13);
-
-  const lead = fupFindLead(r[C_LD]);
-  const leadId = String(r[C_LD] || '').trim();
-  const L_CNAME = leadCol('客户名称(脱敏)', 3);
-  const headTitle = h(r[C_LD] || '未关联线索') + (lead && lead[L_CNAME] ? ' · ' + h(lead[L_CNAME]) : '');
-
-  // ---- 1. 线索基本信息（只读） ----
-  let infoHtml = '';
-  if (lead) {
-    infoHtml = '<div class="fd-grid">' + LEADS_HEADERS.map(function(hd, i) {
-      const v = h(lead[i] || '');
-      return '<div class="fd-item"><div class="fd-k">' + h(hd) + '</div><div class="fd-v">' + (v || '<span style="color:var(--text3)">—</span>') + '</div></div>';
-    }).join('') + '</div>';
-  } else {
-    infoHtml = '<div class="fd-empty">未关联线索（本条跟进记录的线索编号：' + (h(leadId) || '空') + '）</div>';
-  }
-
-  // ---- 2. 本次跟进信息（可编辑） ----
-  const cd = fupCountdownInfo(r);
-  const cdHtml = (cd.state === 'over')
-    ? '<div class="fd-warn">🔴 已超过 48 小时跟进时限，请尽快补充「跟进记录」</div>'
-    : '<div class="fd-ok">48h 跟进时限：' + cd.html + '</div>';
-
-  let fieldsHtml = '';
-  FUP_HEADERS.forEach(function(hd, ci) {
-    if (hd === '操作') return;                                  // 虚拟列，不生成控件
-    if (hd === '跟进记录') return;                              // 由下方「跟进记录」独立区块渲染
-    const val = r[ci] || '';
-    const readonly = (ci === C_ID || ci === C_LD);              // 主键列只读保护
-    const isLong = (hd === '首次跟进' || hd === '下一步计划');
-    let ctrl = '';
-    if (hd === '跟进方式') ctrl = fdSelectHtml(ci, METHOD_OPTIONS, val, readonly);
-    else if (hd === '预算确认') ctrl = fdSelectHtml(ci, BUDGET_CONFIRM, val, readonly);
-    else if (hd === '阶段变化') ctrl = fdSelectHtml(ci, STAGE_CHANGE, val, readonly);
-    else if (hd === '负责人') ctrl = fdSelectHtml(ci, fupDetailOwners(), val, readonly);
-    else if (isLong) ctrl = '<textarea id="fd_' + ci + '" class="form-control" rows="3"' + (readonly ? ' disabled' : '') + '>' + h(val) + '</textarea>';
-    else ctrl = '<input id="fd_' + ci + '" class="form-control" value="' + h(val) + '"' + (readonly ? ' disabled' : '') + '>';
-    fieldsHtml += '<div class="fd-field' + (isLong ? ' full' : '') + '"><label>' + h(hd)
-      + (readonly ? ' <span style="color:var(--text3)">（主键，不可修改）</span>' : '') + '</label>' + ctrl + '</div>';
-  });
-
-  // ---- 2.5 跟进记录子项（日期 + 内容，可无限新增） ----
-  const recList = fupRecords(r);
-  const recHtml = '<div id="fdRecList">' + recList.map(function(it) {
-    return '<div class="fd-rec">'
-      + '<div class="fd-rec-h">'
-      + '<input type="date" class="fd-rec-d" value="' + h(it.d) + '">'
-      + '<button type="button" class="small danger fd-rec-del" onclick="this.closest(\'.fd-rec\').remove()">✕</button>'
-      + '</div>'
-      + '<textarea class="fd-rec-t" rows="2" placeholder="本次跟进内容">' + h(it.t) + '</textarea>'
-      + '</div>';
-  }).join('') + '</div>'
-  + '<button type="button" class="small" onclick="fdAddRecord()" style="margin-top:8px">+ 新增跟进</button>'
-  + (recList.length ? '' : '<div class="fd-empty" style="margin-bottom:8px">暂无跟进记录，点击「+ 新增跟进」添加（只需填日期和内容）</div>');
-
-  // ---- 3. 下一步计划新增 ----
-  const planHtml = '<div class="fd-newplan">'
-    + '<textarea id="fd_newplan" placeholder="填写下一次跟进的行动计划；点击「追加」会为此线索生成一条新的跟进记录（跟进编号 / 跟进日期 / 负责人自动带入）"></textarea>'
-    + '<div class="fd-np-actions"><button class="small primary" onclick="appendFupPlan(' + rowIdx + ')">➕ 追加为新的跟进记录</button></div>'
-    + '</div>';
-
-  // ---- 4. 跟进历史（同一线索编号，按跟进日期倒序） ----
-  const hist = [];
-  fupsData.forEach(function(row, i) {
-    if (row && String(row[C_LD] || '').trim() === leadId) hist.push({ i: i, row: row });
-  });
-  hist.sort(function(a, b) { return String(b.row[C_DT] || '').localeCompare(String(a.row[C_DT] || '')); });
-  let histHtml = '';
-  if (hist.length === 0) {
-    histHtml = '<div class="fd-empty">暂无跟进历史</div>';
-  } else {
-    histHtml = '<div class="fd-hist">' + hist.map(function(x) {
-      const isCur = (x.i === rowIdx);
-      return '<div class="fd-hist-i' + (isCur ? ' cur' : '') + '">'
-        + '<div class="fd-hist-h">'
-        + '<span class="fd-hist-d">' + h(x.row[C_DT] || '—') + '</span>'
-        + (x.row[C_MT] ? '<span class="fd-hist-tag">' + h(x.row[C_MT]) + '</span>' : '')
-        + (x.row[C_CH] ? fupCellHtml('阶段变化', x.row[C_CH], x.i) : '')
-        + (isCur
-            ? '<span class="fd-hist-cur">当前记录</span>'
-            : '<button class="small" style="padding:1px 6px;font-size:10px" onclick="closeFupDetail();openFupDetail(' + x.i + ')">查看此条</button>')
-        + '</div>'
-        + (x.row[C_CT] ? '<div class="fd-hist-c">' + h(x.row[C_CT]) + '</div>' : '')
-        + (x.row[C_PL] ? '<div class="fd-hist-p">下一步：' + h(x.row[C_PL]) + '</div>' : '')
-        + '</div>';
-    }).join('') + '</div>';
-  }
-
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.id = 'fupDetailModal';
-  modal.innerHTML = '<div class="modal-box fup-detail">'
-    + '<div class="fd-head"><h3>📋 ' + headTitle + '</h3>'
-    + '<button class="fd-close" onclick="closeFupDetail()" title="关闭（ESC）">✕</button></div>'
-    + '<div class="fd-body">'
-    + '<div class="fd-sec"><div class="fd-sec-t">线索基本信息</div>' + infoHtml
-    + (lead ? '<div style="margin-top:10px"><button class="small" onclick="closeFupDetail();jumpToLeadByIdx(' + rowIdx + ')">🔗 在线索池中定位</button></div>' : '')
-    + '</div>'
-    + '<div class="fd-sec"><div class="fd-sec-t">本次跟进信息</div>' + cdHtml
-    + '<div class="fd-form">' + fieldsHtml + '</div></div>'
-    + '<div class="fd-sec"><div class="fd-sec-t">跟进记录<span id="fdRecCount" style="font-weight:400;color:var(--text3)">（' + recList.length + ' 条）</span></div>' + recHtml + '</div>'
-    + '<div class="fd-sec"><div class="fd-sec-t">下一步计划新增</div>' + planHtml + '</div>'
-    + '<div class="fd-sec"><div class="fd-sec-t">跟进历史（' + hist.length + ' 条）</div>' + histHtml + '</div>'
-    + '</div>'
-    + '<div class="fd-foot">'
-    + '<button onclick="closeFupDetail()">取消</button>'
-    + (isAdmin() ? '<button class="danger" onclick="deleteFupFromDetail(' + rowIdx + ')">🗑 删除此条</button>' : '')
-    + '<button class="primary" onclick="saveFupDetail(' + rowIdx + ')">💾 保存修改</button>'
-    + '</div>'
-    + '</div>';
-  document.body.appendChild(modal);
-  // 点击遮罩关闭
-  modal.addEventListener('click', function(e) { if (e.target === modal) closeFupDetail(); });
-}
-
-/**
- * 详情弹窗里追加一条空的跟进子项，日期默认今天，并聚焦到内容输入框
- * @returns {Element|null} 新增的 .fd-rec 节点（弹窗不存在时返回 null）
- */
-function fdAddRecord() {
-  const list = document.getElementById('fdRecList');
-  if (!list) return null;                      // 弹窗外调用守卫
-  const now = new Date();
-  const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-  const div = document.createElement('div');
-  div.className = 'fd-rec';
-  div.innerHTML = '<div class="fd-rec-h">'
-    + '<input type="date" class="fd-rec-d" value="' + h(today) + '">'
-    + '<button type="button" class="small danger fd-rec-del" onclick="this.closest(\'.fd-rec\').remove()">✕</button>'
-    + '</div>'
-    + '<textarea class="fd-rec-t" rows="2" placeholder="本次跟进内容"></textarea>';
-  list.appendChild(div);
-  const ta = div.querySelector('.fd-rec-t');
-  if (ta) ta.focus();
-  fdSyncRecCount();
-  return div;
-}
-
-/** 同步详情弹窗「跟进记录（N 条）」计数文本 */
-function fdSyncRecCount() {
-  const list = document.getElementById('fdRecList');
-  const cntEl = document.getElementById('fdRecCount');
-  if (!list || !cntEl) return;
-  const n = list.querySelectorAll('.fd-rec').length;
-  cntEl.textContent = '（' + n + ' 条）';
-}
-
-/**
- * 收集详情弹窗里所有跟进子项 → [{d,t}]（已过滤日期与内容都为空的项）
- * @returns {{d:string,t:string}[]} 子项数组（弹窗不存在时返回 []）
- */
-function fdCollectRecords() {
-  const list = document.getElementById('fdRecList');
-  if (!list) return [];
-  const out = [];
-  list.querySelectorAll('.fd-rec').forEach(function(el) {
-    const dEl = el.querySelector('.fd-rec-d');
-    const tEl = el.querySelector('.fd-rec-t');
-    const d = dEl ? String(dEl.value || '').trim() : '';
-    const t = tEl ? String(tEl.value || '') : '';
-    if (!d && !t.trim()) return;               // 完全为空的占位项丢弃
-    out.push({ d: d, t: t });
-  });
-  return out;
-}
-
-/**
- * 保存详情弹窗中对本条跟进记录的修改
- * @param {number} rowIdx 在 fupsData 中的行索引
- */
-function saveFupDetail(rowIdx) {
-  rowIdx = parseInt(rowIdx, 10);
-  const r = fupsData[rowIdx];
-  if (!r) { toast('未找到该跟进记录', 'err'); closeFupDetail(); return; }
-  const C_ID = fupCol('跟进编号', 0);
-  const C_LD = fupCol('线索编号', 1);
-  FUP_HEADERS.forEach(function(hd, ci) {
-    if (hd === '操作') return;                     // 虚拟列不写回
-    if (hd === '跟进记录') return;                 // 由下方 fdRecList 统一写回，避免 JSON 被当纯文本覆盖
-    if (ci === C_ID || ci === C_LD) return;        // 主键列只读，禁止改写
-    const el = document.getElementById('fd_' + ci);
-    if (!el) return;
-    r[ci] = String(el.value === null || el.value === undefined ? '' : el.value).trim();
-  });
-  // 跟进记录子项（日期 + 内容）整体写回「跟进记录」列
-  const rl = document.getElementById('fdRecList');
-  if (rl) fupRecordsSet(r, fdCollectRecords());
-  markDirty();
-  saveData();
-  scheduleAutoSync();
-  updateHeaderStats();
-  closeFupDetail();
-  renderFollowups();
-  toast('已保存', 'info');
-}
-
-/**
- * 把弹窗里填写的「下一步计划」追加为一条新的跟进记录
- * @param {number} rowIdx 当前跟进记录在 fupsData 中的行索引
- */
-function appendFupPlan(rowIdx) {
-  rowIdx = parseInt(rowIdx, 10);
-  const r = fupsData[rowIdx];
-  if (!r) { toast('未找到该跟进记录', 'err'); return; }
-  const ta = document.getElementById('fd_newplan');
-  const text = ta ? String(ta.value || '').trim() : '';
-  if (!text) { toast('请先填写下一步计划内容', 'warn'); if (ta) ta.focus(); return; }
-
-  const C_ID = fupCol('跟进编号', 0);
-  const C_LD = fupCol('线索编号', 1);
-  const C_DT = fupCol('跟进日期', 2);
-  const C_OW = fupCol('负责人', 14);
-  const C_PL = fupCol('下一步计划', 13);
-
-  const maxNum = fupsData.reduce(function(m, row) {
-    const mm = String((row && row[C_ID]) || '').match(/FUP-2026-(\d+)/);
-    return mm ? Math.max(m, parseInt(mm[1], 10)) : m;
-  }, 0);
-  const now = new Date();
-  const dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-
-  const newRow = new Array(Math.max(FUP_HEADERS.length, 15)).fill('');
-  newRow[C_ID] = 'FUP-2026-' + String(maxNum + 1).padStart(4, '0');
-  newRow[C_LD] = String(r[C_LD] || '').trim();
-  newRow[C_DT] = dateStr;
-  newRow[C_OW] = String(r[C_OW] || '').trim();
-  newRow[C_PL] = text;
-
-  fupsData.push(newRow);
-  saveData();
-  scheduleAutoSync();
-  updateHeaderStats();
-  toast('已追加 1 条跟进记录', 'info');
-  closeFupDetail();
-  renderFollowups();
-}
-
-/** 48h 时限是否达标：「跟进记录」至少有 1 条子项即视为已填写 */
-function fupDeadlineFilled(r) { return fupRecords(r).length > 0; }
 function fupCountdownInfo(r) {
-  const C_TS = fupRecCol();
+  const C_TS = fupDeadlineContentIdx();
   if (C_TS < 0) return { state: 'none', html: '<span class="cd-none">—</span>' };
-  if (fupDeadlineFilled(r)) return { state: 'ok', html: '<span class="cd-ok">✅ 已填写</span>' };
+  if ((r[C_TS] || '').trim() !== '') return { state: 'ok', html: '<span class="cd-ok">✅ 已填写</span>' };
   const dateStr = (r[fupCol('跟进日期', 2)] || '').trim();
   const m = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2}))?/);
   if (!m) return { state: 'none', html: '<span class="cd-none">—</span>' };
@@ -43934,9 +43257,6 @@ function finishEdit(newVal) {
     var bv = newVal;
     var bc = bv==='MQL'?'badge-mql':(bv==='Raw'?'badge-raw':(['SQL','商机推进','报价与谈判'].includes(bv)?'badge-sql':(bv==='成交签约'?'badge-won':'badge-lost')));
     td.innerHTML = '<span class="badge ' + bc + '">' + h(newVal) + '</span>';
-  } else if (activeTab === 'followups') {
-    // 跟进记录：统一走 fupCellHtml 重渲染，保证胶囊标签 / 线索编号链接不被降级成纯文本
-    td.innerHTML = fupCellHtml(FUP_HEADERS[col] || '', newVal, rowIdx);
   } else {
     td.textContent = newVal;
   }
@@ -44096,8 +43416,8 @@ function createFollowupRow(lead) {
   row[fupCol('跟进日期', 2)] = dateStr;
   // 自动带入该线索最近一条跟进的跟进内容（无则留空，销售可修改）
   const lastContent = latestFupContent(lead[0]);
-  if (lastContent) row[fupFirstCol()] = lastContent;
-  row[fupCol('负责人', 14)] = lead[13] || '';  // 负责人（从线索池同步）
+  if (lastContent) row[fupCol('跟进内容', 4)] = lastContent;
+  row[fupCol('负责人', 13)] = lead[13] || '';  // 负责人（从线索池同步）
   return row;
 }
 
@@ -44206,15 +43526,14 @@ function addFollowup() {
 
 // ---- 删除跟进记录 ----
 function deleteFupRow(rowIdx) {
-  if (!isAdmin()) { toast('仅管理员可删除跟进记录', 'warn'); return false; }
-  if (!confirm(`确定删除跟进记录 ${fupsData[rowIdx][0]} 吗？此操作不可恢复。`)) return false;
+  if (!isAdmin()) { toast('仅管理员可删除跟进记录', 'warn'); return; }
+  if (!confirm(`确定删除跟进记录 ${fupsData[rowIdx][0]} 吗？此操作不可恢复。`)) return;
   fupsData.splice(rowIdx, 1);
   _confirmBulkDeleteAt = Date.now();  // 显式删除操作：允许本次推送携带批量删除确认
   saveData();
   scheduleAutoSync();
   toast('已删除跟进记录', 'info');
   render();
-  return true;
 }
 
 // ---- 删除线索 ----
@@ -44402,10 +43721,10 @@ function buildBatchLeadEditCols() {
 }
 // 跟进记录批量修改列：按当前表头动态解析，自定义列插入/删除后仍能对齐
 function buildBatchFupEditCols() {
-  var cols = [
+  return [
     { col: fupCol('跟进日期', 2),  name: '跟进日期', type: 'text' },
     { col: fupCol('跟进方式', 3),  name: '跟进方式', type: 'select', list: METHOD_OPTIONS },
-    { col: fupFirstCol(), name: '首次跟进', type: 'text' },
+    { col: fupCol('跟进内容', 4),  name: '跟进内容', type: 'text' },
     { col: fupCol('产品型号意向', 6),  name: '产品型号意向', type: 'text' },
     { col: fupCol('预算范围(万元)', 7),  name: '预算范围(万元)', type: 'text' },
     { col: fupCol('预算确认', 8),  name: '预算确认', type: 'select', list: BUDGET_CONFIRM },
@@ -44416,9 +43735,6 @@ function buildBatchFupEditCols() {
     { col: fupCol('下一步计划', 13),  name: '下一步计划', type: 'text' },
     { col: fupCol('负责人', 14),  name: '负责人', type: 'select', list: SALES_LIST }
   ];
-  // 系统列允许改名：若某列按名称解析不到（fupCol 返回 -1），宁可不提供该列的批量修改，
-  // 也绝不能退回 fallback 写错列（与 2026-09-23「下一步计划列被写成人名」同型事故）
-  return cols.filter(function(c) { return c.col >= 0; });
 }
 function batchColOptions(colList) {
   return Array.isArray(colList) ? colList : [];
@@ -44938,9 +44254,6 @@ function init() {
     // Load embedded default data
     loadDefault();
   }
-  // 需求七迁移（幂等）：「跟进内容」→「首次跟进」，旧「跟进内容MM.DD」列 →「跟进记录」(JSON 子项)
-  // 只改本地并落 localStorage，不主动推服务器，避免多客户端并发冲突
-  if (fupMigrateToRecords()) { try { saveData(); } catch (e) {} }
   updateHeaderStats();
   render();
 
@@ -44953,7 +44266,6 @@ function init() {
   syncFromServer().then(function(serverUpdated) {
     serverSyncing = false;
     if (serverUpdated) {
-      if (fupMigrateToRecords()) { try { saveData(); } catch (e) {} }
       updateHeaderStats();
       render();
       toast('已从服务器同步最新数据', 'info');
@@ -45100,8 +44412,6 @@ document.addEventListener('keydown', function(e) {
     if (modal) { closeAddLeadModal(); return; }
     var colModal = document.getElementById('addColumnModal');
     if (colModal) { closeAddColumnModal(); return; }
-    var fupModal = document.getElementById('fupDetailModal');
-    if (fupModal) { closeFupDetail(); return; }
     if (selRange) { clearRangeSelection(); toast('已取消选区', 'info'); return; }
   }
 

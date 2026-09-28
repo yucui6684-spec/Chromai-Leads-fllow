@@ -1,0 +1,9 @@
+{
+  "name": "chromai-leads-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test-rbac.js"
+  }
+}
