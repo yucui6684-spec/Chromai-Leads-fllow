@@ -44990,6 +44990,41 @@ function init() {
       if (syncEl1) syncEl1.textContent = '🟡 本地模式（等待服务器连接）';
     }
   }).catch(function() { serverSyncing = false; });
+
+  // 深链：邮件里的「点击处理」带 ?fup=FUP-XXXX，自动切到 MQLs 并打开该条详情
+  openDeepLinkFup(0);
+}
+
+// 深链打开指定跟进记录（?fup=跟进编号）
+// 数据可能是服务端异步拉回来的，所以找不到时按 600ms 间隔重试（最多约 7 秒）
+var __deepLinkDone = false;
+function openDeepLinkFup(attempt) {
+  if (__deepLinkDone) return;
+  var m = /[?&]fup=([^&#]*)/.exec(String(location.search || ''));
+  if (!m) return;
+  var id = '';
+  try { id = decodeURIComponent(m[1] || ''); } catch (e) { id = m[1] || ''; }
+  id = String(id).trim();
+  if (!id) return;
+
+  var idx = -1;
+  try {
+    var ci = fupCol('跟进编号', 0);
+    for (var i = 0; i < (fupsData || []).length; i++) {
+      if (String((fupsData[i] || [])[ci] || '').trim() === id) { idx = i; break; }
+    }
+  } catch (e) { idx = -1; }
+
+  if (idx < 0) {
+    var n = attempt || 0;
+    // 服务端同步可能还没回来；未登录时也不重试（登录后才会有数据）
+    if (n < 12 && currentUser) { setTimeout(function() { openDeepLinkFup(n + 1); }, 600); return; }
+    if (currentUser) toast('未找到跟进记录 ' + id + '（可能已被删除）', 'warn');
+    return;
+  }
+  __deepLinkDone = true;
+  try { switchTab('followups'); } catch (e) {}
+  try { openFupDetail(idx); } catch (e) {}
 }
 
 document.addEventListener('DOMContentLoaded', function() {

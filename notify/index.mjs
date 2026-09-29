@@ -199,7 +199,8 @@ function buildNotification(stage, row, headers, leadMap, cfg, userIndex) {
     window: C_WIN >= 0 ? String(row[C_WIN] || '').trim() : '',
     firstFeedback: C_FB >= 0 ? String(row[C_FB] || '').trim() : '',
     nextPlan: C_PL >= 0 ? String(row[C_PL] || '').trim() : '',
-    publicUrl: (cfg.site && cfg.site.publicUrl) || 'https://leads.chromai.com/'
+    // 深链：?fup=跟进编号 → 打开页面自动弹出该条详情（需前端支持，config.options.deepLink 控制）
+    publicUrl: deepLinkUrl(cfg, ctx.fupId)
   };
   return {
     skip: false,
@@ -226,6 +227,15 @@ function buildNotification(stage, row, headers, leadMap, cfg, userIndex) {
     text: R.buildText(ctx),
     html: R.buildHtml(ctx)
   };
+}
+
+/** 单条线索的直达链接（开启 deepLink 时带 ?fup=跟进编号，点开即弹该条详情） */
+function deepLinkUrl(cfg, fupId) {
+  const base = (cfg.site && cfg.site.publicUrl) || 'https://leads.chromai.com/';
+  if (!(cfg.options && cfg.options.deepLink)) return base;
+  const id = String(fupId || '').trim();
+  if (!id) return base;
+  return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'fup=' + encodeURIComponent(id);
 }
 
 /** 第③封的抄送说明（区分「无大区总」与「大区总即本人」） */

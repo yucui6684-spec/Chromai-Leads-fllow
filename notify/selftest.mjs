@@ -92,11 +92,13 @@ if (!cands.length) {
 }
 
 const stage = 2;
+const baseUrl = (cfg.site && cfg.site.publicUrl) || 'https://leads.chromai.com/';
 const items = cands.map(function(r) {
   const lead = leadMap.get(String(r[F_LD] || '').trim().toLowerCase()) || { customer: '', contact: '', phone: '' };
+  const fupId = String(r[F_ID] || '').trim();
   return {
     stage: stage,
-    fupId: String(r[F_ID] || '').trim(),
+    fupId: fupId,
     leadId: String(r[F_LD] || '').trim(),
     owner: String(r[F_OW] || '').trim(),
     followDate: String(r[F_DT] || '').trim(),
@@ -109,7 +111,9 @@ const items = cands.map(function(r) {
     window: F_WIN >= 0 ? String(r[F_WIN] || '').trim() : '',
     firstFeedback: F_FB >= 0 ? String(r[F_FB] || '').trim() : '',
     nextPlan: F_PL >= 0 ? String(r[F_PL] || '').trim() : '',
-    publicUrl: (cfg.site && cfg.site.publicUrl) || 'https://leads.chromai.com/'
+    publicUrl: (cfg.options && cfg.options.deepLink)
+      ? baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + 'fup=' + encodeURIComponent(fupId)
+      : baseUrl
   };
 });
 

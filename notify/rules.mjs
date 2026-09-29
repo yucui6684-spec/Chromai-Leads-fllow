@@ -352,6 +352,7 @@ function stageTitle(stage) {
  */
 export function buildTextMulti(stage, owner, items) {
   const list = Array.isArray(items) ? items : [];
+  const url = (list[0] && list[0].publicUrl) || 'https://leads.chromai.com/';
   const lines = [];
   lines.push('科诺美线索跟进提醒：' + stageTitle(stage) + '（共 ' + list.length + ' 条）');
   lines.push('');
@@ -368,10 +369,11 @@ export function buildTextMulti(stage, owner, items) {
       + '　采购时间窗：' + (x.window || '—'));
     lines.push('  首次反馈：' + (x.firstFeedback || '—'));
     lines.push('  下一步计划：' + (x.nextPlan || '—'));
+    lines.push('  打开此条：' + (x.publicUrl || url));
     lines.push('');
   });
   lines.push('请登录线索系统，为以上线索填写「跟进记录」，填写后即停止提醒。');
-  lines.push((list[0] && list[0].publicUrl) || 'https://leads.chromai.com/');
+  lines.push(url);
   return lines.join('\n');
 }
 
@@ -411,7 +413,10 @@ export function buildHtmlMulti(stage, owner, items) {
       + row('联系人', x.contact) + row('联系电话', x.phone)
       + row('产品型号意向', x.model) + row('预算范围(万元)', x.budget) + row('采购时间窗', x.window)
       + row('首次反馈', x.firstFeedback) + row('下一步计划', x.nextPlan)
-      + '</table></div>';
+      + '</table>'
+      + '<div style="margin-top:6px"><a style="font-size:12px;color:#378add" href="'
+      + esc(x.publicUrl || url) + '">打开此条 →</a></div>'
+      + '</div>';
   });
 
   html += '<p style="margin:14px 0 4px"><a href="' + esc(url) + '">打开线索跟进系统</a></p>'
