@@ -207,7 +207,8 @@ function buildNotification(stage, row, headers, leadMap, cfg, userIndex) {
     firstFeedback: C_FB >= 0 ? String(row[C_FB] || '').trim() : '',
     nextPlan: C_PL >= 0 ? String(row[C_PL] || '').trim() : '',
     // 深链：?fup=跟进编号 → 打开页面自动弹出该条详情（需前端支持，config.options.deepLink 控制）
-    publicUrl: deepLinkUrl(cfg, ctx.fupId)
+    // ⚠️ 不能写 ctx.fupId：这里仍在 ctx 的初始化表达式内部，引用自身会触发 TDZ（Cannot access 'ctx' before initialization）
+    publicUrl: deepLinkUrl(cfg, String(row[C_ID] || '').trim())
   };
   return {
     skip: false,
@@ -375,6 +376,11 @@ async function main() {
     return;
   }
 
+  // ---- 记录本次扫描「之前」已见过的跟进编号 ----
+  // ⚠️ 必须在下面更新 state 快照之前取：否则新增行会被自己刚登记的记录"吃掉"，
+  //    isNew 恒为 false → 档位①（新增提醒）永远发不出去。
+  const knownIdsBefore = new Set(Object.keys(state.records));
+
   // ---- 更新 state 中的记录快照 ----
   const C_ID = R.colIndex(fupHeaders, '跟进编号');
   const C_LD = R.colIndex(fupHeaders, '线索编号');
@@ -400,7 +406,8 @@ async function main() {
   const goLiveAt = state.meta.goLiveAt || 0;
   const ev = R.evaluate({
     headers: fupHeaders, rows: fupRows, state: state, now: nowMs,
-    thresholds: cfg.thresholds, baseline: false, goLiveAt: goLiveAt
+    thresholds: cfg.thresholds, baseline: false, goLiveAt: goLiveAt,
+    knownIds: knownIdsBefore
   });
   // 新首次出现且已超时 → ②③ 本次抑制（多为补录历史数据，一次发 3 封属于轰炸）
   ev.suppress.forEach(function(s) {
@@ -580,8 +587,14 @@ async function main() {
     log('hub 推送(dry): sent=' + hr.sent + ' failed=' + hr.failed);
   }
 
-  saveState(state);
-  log('state 已保存：记录 ' + Object.keys(state.records).length + ' 条，待发队列 ' + state.pending.length + ' 项');
+  // ⚠️ dry 是演练，绝不落盘：否则每次 --dry 都会把新增行登记进 state，
+  //    下次正式运行时它们已「见过」，新增邮件就发不出来了。
+  if (isDry) {
+    log('（dry 演练：state 未落盘，记录仍为 ' + Object.keys(state.records).length + ' 条）');
+  } else {
+    saveState(state);
+    log('state 已保存：记录 ' + Object.keys(state.records).length + ' 条，待发队列 ' + state.pending.length + ' 项');
+  }
   log('===== 运行结束 =====');
 }
 

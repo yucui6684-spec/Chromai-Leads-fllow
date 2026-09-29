@@ -452,6 +452,10 @@ export function evaluate(args) {
   const C_RC = colIndexAny(headers, ['跟进记录', '跟进内容09.14']);
   const C_OW = colIndex(headers, '负责人');
 
+  // 本次扫描前已见过的跟进编号集合（由调用方在更新 state 快照之前传入）；
+  // 不传则退回用 state.records 判定（等价于旧行为，仅单测兼容）
+  const knownIds = args.knownIds || null;
+
   const out = { newIds: [], dues: [], doneIds: [], beforeGoLive: [], suppress: [], skipped: [] };
   if (C_ID < 0) {
     out.skipped.push({ reason: '表头缺少「跟进编号」列，无法判定' });
@@ -479,7 +483,10 @@ export function evaluate(args) {
     if (args.baseline) return;
 
     const rec = state.records && state.records[fupId];
-    const isNew = !rec;
+    // ⚠️ 判定「是否新增」必须基于本次扫描**之前**已见过的编号集合（args.knownIds）。
+    // 不能直接用 state.records：调用方会在 evaluate 之前先把全量行登记进 state，
+    // 若这里读 state.records，新增行会被自己刚写入的记录"吃掉"，永远判不成新增 → ①新增邮件永远发不出去。
+    const isNew = knownIds ? !knownIds.has(fupId) : !rec;
 
     if (isNew) out.newIds.push(fupId);
 
