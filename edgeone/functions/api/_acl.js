@@ -127,10 +127,60 @@ export function diffDataset(user, oldPayload, bodyPayload, type, leadIdx) {
 
   const creates = [], updates = [], deletes = [], violations = [];
   const bodyIds = new Set();
+
+  // ---- 重复编号兜底（2026-09-29 事故修复）----
+  // 前端曾用 fupsData.length + 1 生成跟进编号，历史删除留下编号空洞 → 新增时撞上已有编号。
+  // 旧行为「body 内重复编号取第一行，其余直接丢弃」会**静默丢数据**：不报错、不写日志、仍返回 200，
+  // 前端随后又被 PULL 整体覆盖，表现为「新增记录凭空消失」。
+  // 现改为：若该行与库中同号行内容不同 → 视作真实新增，由服务端重新分配一个未占用的编号保存并留痕；
+  // 若内容一致 → 确属重复推送的同一行，跳过（保持原语义）。
+  const idCol = type === 'lead'
+    ? colIndex(bodyH, H.LEAD_ID, FALLBACK.LEAD_ID)
+    : colIndex(bodyH, H.FUP_ID, FALLBACK.FUP_ID);
+
+  // 分配一个当前未被占用的新编号（沿用 LD-/FUP- + 年份 + 4 位序号）
+  const allocNewId = function() {
+    const prefix = type === 'lead' ? 'LD' : 'FUP';
+    const year = new Date().getFullYear();
+    const re = new RegExp('^' + prefix + '-\\d{4}-(\\d+)$');
+    let maxNum = 0;
+    const bump = function(idStr) {
+      const mm = String(idStr || '').trim().toUpperCase().match(re);
+      if (mm) maxNum = Math.max(maxNum, parseInt(mm[1], 10));
+    };
+    oldAll.forEach(function(_v, k) { bump(k); });
+    bodyIds.forEach(function(k) { bump(k); });
+    return prefix + '-' + year + '-' + String(maxNum + 1).padStart(4, '0');
+  };
+
   bodyData.forEach(br => {
     const id = idOf(br, bodyH);
     if (!id) return;              // 无编号行无法定位身份，忽略（不入库也不算删除）
-    if (bodyIds.has(id)) return;  // body 内重复编号取第一行
+    if (bodyIds.has(id)) {
+      // 仅对跟进记录（fup）兜底：
+      //  - lead 主键由前端 max+1 生成，不会撞号；且 lead 有既有用例
+      //    「l001 / L001 / ' l001 ' 视为同一行，不得新增重复行」，必须保持原语义。
+      //  - 判据取「线索编号不同」：说明这是另一条真实记录被前端错配了已有编号
+      //    （前端曾用 length+1 生成编号，历史删除留下空洞 → 撞上已有记录）。
+      const oldR = oldAll.get(id);
+      const liOld = colIndex(oldH, H.FUP_LEAD_ID, FALLBACK.FUP_LEAD_ID);
+      const liBody = colIndex(bodyH, H.FUP_LEAD_ID, FALLBACK.FUP_LEAD_ID);
+      const leadA = oldR && liOld >= 0 ? String(oldR[liOld] || '').trim().toLowerCase() : '';
+      const leadB = (type === 'fup' && liBody >= 0) ? String(br[liBody] || '').trim().toLowerCase() : '';
+      if (type === 'fup' && leadA !== leadB) {
+        const newId = allocNewId();
+        if (!newId) return;
+        bodyIds.add(newId.toLowerCase());
+        const rr = Array.isArray(br) ? br.slice() : [];
+        if (idCol >= 0) rr[idCol] = newId;
+        creates.push({
+          id: newId.toLowerCase(), row: remapRow(rr, bodyH, headers),
+          renamedFrom: String(id).toUpperCase()
+        });
+        return;
+      }
+      return;   // 其余保持原语义：body 内重复编号取第一行
+    }
     bodyIds.add(id);
     if (oldVisible.has(id)) {
       // update 候选：未在 bodyH 出现的列沿用旧值（headers 并集保序，前端删列不丢数据）
@@ -239,7 +289,7 @@ export function checkWritePerm(user, d, type, leadIdx) {
       if (ri >= 0) row[ri] = user.region || user.name;
     }
     touches.push({ owner: row[oi] || '', region: ri >= 0 ? (row[ri] || '') : '' });
-    creates.push({ id: c.id, row: row });
+    creates.push({ id: c.id, row: row, renamedFrom: c.renamedFrom || '' });
   });
 
   // delete 候选已在 diff 阶段按旧数据可见性限定（sales 只能删本人行 / region 只能删本大区行）

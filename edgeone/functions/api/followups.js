@@ -157,7 +157,11 @@ export async function onRequest({ request, env }) {
       if (checked.creates.length >= IMPORT_THRESHOLD) {
         entries.push(Object.assign({}, base, { event: 'import', objectId: '', detail: '批量新增 ' + checked.creates.length + ' 条跟进记录' }));
       } else {
-        checked.creates.forEach(c => entries.push(Object.assign({}, base, { event: 'create', objectId: c.id })));
+        checked.creates.forEach(c => entries.push(Object.assign({}, base, {
+          event: 'create', objectId: c.id,
+          // 前端编号撞车时服务端会重新分配编号保存（防静默丢失），此处留痕便于排查
+          detail: c.renamedFrom ? ('前端提交编号 ' + c.renamedFrom + ' 与已有记录重复，服务端已改分配为 ' + c.id.toUpperCase()) : ''
+        })));
       }
       checked.updates.forEach(u => entries.push(Object.assign({}, base, { event: 'update', objectId: u.id, diff: u.diff })));
       checked.deletes.forEach(del => entries.push(Object.assign({}, base, { event: 'delete', objectId: del.id })));
