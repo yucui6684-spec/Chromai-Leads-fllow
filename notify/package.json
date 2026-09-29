@@ -1,0 +1,22 @@
+{
+  "name": "chromai-leads-notify",
+  "version": "1.0.0",
+  "private": true,
+  "description": "科诺美线索系统 - MQLs 跟进提醒（新增/48h/72h 三封邮件）本机定时脚本",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "init": "node index.mjs --init",
+    "dry": "node index.mjs --dry",
+    "run": "node index.mjs",
+    "check": "node check.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.14"
+  },
+  "author": "科诺美市场中心",
+  "license": "MIT"
+}

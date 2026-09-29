@@ -1,0 +1,9 @@
+# 本地真实配置与运行时状态：绝不能进版本库
+config.json
+state.json
+logs/
+*.log
+
+# 依赖装在 notify 目录内（不用全局）
+node_modules/
+package-lock.json
