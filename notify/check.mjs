@@ -209,15 +209,48 @@ const sums = R.buildSummary({ headers: HEADERS, rows: rows, now: NOW,
   adminEmail: 'yucui@chromai.com', publicUrl: 'https://leads.chromai.com/' });
 const byKey = {};
 sums.forEach(function(s) { byKey[s.key] = s; });
-chk('超 48h 欠账被聚合（FUP-48 刘力瑞 + FUP-72 王泽 → 汤显义一封）',
-  !!byKey['汤显义'] && byKey['汤显义'].count === 1, JSON.stringify(Object.keys(byKey)));
+chk('超 48h 欠账按负责人分信（刘力瑞 1 封 + 王泽 1 封，不再按大区总合并）',
+  !!byKey['刘力瑞'] && byKey['刘力瑞'].count === 1
+  && !!byKey['王泽'] && byKey['王泽'].count === 1, JSON.stringify(Object.keys(byKey)));
+chk('收件人 = 负责人本人，抄送 = 其大区总',
+  byKey['王泽'].to === 'wangze@chromai.com' && byKey['王泽'].cc.join(',') === 'tangxianyi@chromai.com'
+  && byKey['刘力瑞'].to === 'liulirui@chromai.com' && byKey['刘力瑞'].cc.join(',') === 'guanneng@chromai.com',
+  (byKey['王泽'] ? byKey['王泽'].to + ' cc=' + byKey['王泽'].cc.join(',') : '')
+  + ' | ' + (byKey['刘力瑞'] ? byKey['刘力瑞'].to + ' cc=' + byKey['刘力瑞'].cc.join(',') : ''));
 chk('已跟进的不进汇总', sums.every(function(s) {
   return s.byOwner.every(function(g) { return g.items.every(function(it) { return it.fupId !== 'FUP-DONE'; }); });
 }));
-chk('汇总含客户名称与超时时长', byKey['汤显义'] && byKey['汤显义'].text.indexOf('客户C') > 0
-  && byKey['汤显义'].text.indexOf('超时') > 0);
-chk('汇总主题格式正确', byKey['汤显义'] && /^【历史欠账汇总】汤显义 大区有 \d+ 条超 48 小时未跟进$/.test(byKey['汤显义'].subject),
-  byKey['汤显义'] && byKey['汤显义'].subject);
+chk('汇总含客户名称与超时时长', byKey['王泽'] && byKey['王泽'].text.indexOf('客户C') > 0
+  && byKey['王泽'].text.indexOf('超时') > 0);
+chk('汇总主题格式正确（负责人口径）', byKey['王泽']
+  && /^【历史欠账汇总】王泽：你有 \d+ 条超 48 小时未跟进的线索$/.test(byKey['王泽'].subject),
+  byKey['王泽'] && byKey['王泽'].subject);
+
+// 无大区总（IVD）不抄送 + 负责人为空进 admin 兜底
+const rowsJ2 = [
+  row('FUP-IVD', 'LD-7', '2026-09-26', '', '张塞云'),
+  row('FUP-NOOWNER', 'LD-8', '2026-09-26', '', '')
+];
+const sums2 = R.buildSummary({ headers: HEADERS, rows: rowsJ2, now: NOW,
+  thresholds: { stage2Hours: 48, stage3Hours: 72 }, userIndex: idx, leadMap: leadMapJ,
+  adminEmail: 'yucui@chromai.com', publicUrl: 'https://leads.chromai.com/' });
+const byKey2 = {};
+sums2.forEach(function(s) { byKey2[s.key] = s; });
+chk('IVD（张塞云）的欠账信不抄送任何人', !!byKey2['张塞云'] && byKey2['张塞云'].cc.length === 0,
+  byKey2['张塞云'] ? JSON.stringify(byKey2['张塞云'].cc) : JSON.stringify(Object.keys(byKey2)));
+chk('负责人为空的欠账进 admin 兜底信', !!byKey2['__admin__']
+  && byKey2['__admin__'].to === 'yucui@chromai.com' && byKey2['__admin__'].count === 1,
+  JSON.stringify(Object.keys(byKey2)));
+
+// head 模式回归：旧行为（按大区总聚合）仍然可用
+const sumsH = R.buildSummary({ headers: HEADERS, rows: rows, now: NOW,
+  thresholds: { stage2Hours: 48, stage3Hours: 72 }, userIndex: idx, leadMap: leadMapJ,
+  adminEmail: 'yucui@chromai.com', publicUrl: 'https://leads.chromai.com/', mode: 'head' });
+const byKeyH = {};
+sumsH.forEach(function(s) { byKeyH[s.key] = s; });
+chk('--summary-mode=head 仍按大区总聚合（汤显义 / 管能各一封）',
+  !!byKeyH['汤显义'] && byKeyH['汤显义'].count === 1
+  && !!byKeyH['管能'] && byKeyH['管能'].count === 1, JSON.stringify(Object.keys(byKeyH)));
 
 console.log('\n===== check 结果: ' + (pass ? 'PASS ✓' : 'FAIL ✗') + ' =====');
 process.exit(pass ? 0 : 1);

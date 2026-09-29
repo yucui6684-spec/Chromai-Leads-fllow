@@ -35,6 +35,13 @@ const ARGS = {
     return i >= 0 && argv[i + 1] ? argv[i + 1] : '';
   })(),
   summary: argv.includes('--summary'),
+  // --summary-mode=head 可切回「按大区总聚合」的旧行为；默认 owner（发负责人、抄送大区总）
+  summaryMode: (function() {
+    const m = /--summary-mode[= ]+(\S+)/.exec(argv.join(' '));
+    return m ? String(m[1]).trim() : '';
+  })(),
+  // --only-new：本次只处理档位①（新增），用于高频轮询「新增即时发信」
+  onlyNew: argv.includes('--only-new') || argv.includes('--stage1'),
   limit: (function() {
     const i = argv.indexOf('--limit');
     return i >= 0 && argv[i + 1] ? parseInt(argv[i + 1], 10) : 0;
@@ -282,17 +289,22 @@ async function main() {
 
   // ---- --summary：历史欠账按大区总汇总（显式执行，与正常扫描互斥）----
   if (ARGS.summary) {
+    const sumMode = ARGS.summaryMode === 'head' ? 'head' : 'owner';
     const sums = R.buildSummary({
       headers: fupHeaders, rows: fupRows, now: nowMs, thresholds: cfg.thresholds,
       userIndex: userIndex, leadMap: leadMap,
       adminEmail: (cfg.admin && cfg.admin.email) || '',
-      publicUrl: (cfg.site && cfg.site.publicUrl) || 'https://leads.chromai.com/'
+      publicUrl: (cfg.site && cfg.site.publicUrl) || 'https://leads.chromai.com/',
+      mode: sumMode
     });
-    log('历史欠账汇总：' + sums.length + ' 封（超 48h 未跟进，按大区总聚合）');
+    log('历史欠账汇总：' + sums.length + ' 封（超 48h 未跟进，'
+      + (sumMode === 'owner' ? '按负责人分信、抄送大区总' : '按大区总聚合') + '）');
     if (isDry || !inWindow) {
       sums.forEach(function(s, i) {
         log(String(i + 1).padStart(3, ' ') + '. 收件 ' + s.to
-          + ' | ' + (s.headName ? s.headName + ' 大区' : 'IVD / 未归属（admin 兜底）')
+          + (s.cc && s.cc.length ? ' | 抄送 ' + s.cc.join(',') : '')
+          + ' | ' + (s.ownerName ? s.ownerName + '（负责人）'
+            : (s.headName ? s.headName + ' 大区' : 'IVD / 未归属（admin 兜底）'))
           + ' | ' + s.count + ' 条 | ' + s.subject);
         s.byOwner.forEach(function(g) {
           log('       - ' + g.owner + '：' + g.items.length + ' 条（最长超时 '
@@ -306,9 +318,10 @@ async function main() {
       let ok = 0, bad = 0;
       for (const s of sums) {
         const r = await Mailer.sendMail(transport, {
-          from: cfg.smtp.from, to: s.to, subject: s.subject, text: s.text, html: s.html
+          from: cfg.smtp.from, to: s.to, cc: s.cc || [],
+          subject: s.subject, text: s.text, html: s.html
         });
-        if (r.ok) { ok++; log('汇总已发送 → ' + s.to + ' | ' + s.subject); }
+        if (r.ok) { ok++; log('汇总已发送 → ' + s.to + (s.cc && s.cc.length ? '（抄送 ' + s.cc.join(',') + '）' : '') + ' | ' + s.subject); }
         else { bad++; log('汇总发送失败 → ' + s.to + ' : ' + r.error); }
       }
       try { transport.close(); } catch (e) { /* ignore */ }
@@ -409,7 +422,12 @@ async function main() {
   });
   if (cancelled) log('已跟进，取消待发队列 ' + cancelled + ' 项');
 
-  const dues = R.filterSent(ev.dues, state);
+  let dues = R.filterSent(ev.dues, state);
+  if (ARGS.onlyNew) {
+    const before = dues.length;
+    dues = dues.filter(function(d) { return Number(d.stage) === 1; });
+    log('--only-new：本次只处理档位①（新增即时发信），暂缓 ' + (before - dues.length) + ' 个 ②③ 档位（留给每日定时扫描）');
+  }
   log('判定结果：新增 ' + ev.newIds.length + ' 条 / 已跟进 ' + ev.doneIds.length
     + ' 条 / 上线前存量 ' + ev.beforeGoLive.length + ' 条 / 待发档位 ' + dues.length + ' 个'
     + (ev.suppress.length ? ' / 抑制 ' + ev.suppress.length + ' 个' : ''));
@@ -468,6 +486,7 @@ async function main() {
       const transport = await Mailer.createTransport(cfg.smtp);
       const remain = [];
       for (const p of state.pending) {
+        if (ARGS.onlyNew && Number(p.stage) !== 1) { remain.push(p); continue; }
         const r = await Mailer.sendMail(transport, {
           from: cfg.smtp.from, to: p.to, cc: p.cc, subject: p.subject, text: p.text, html: p.html
         });

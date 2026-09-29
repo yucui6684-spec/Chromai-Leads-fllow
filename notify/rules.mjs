@@ -517,10 +517,16 @@ export function evaluate(args) {
 }
 
 /**
- * 历史欠账汇总（--summary）：按大区总聚合「超 48 小时未跟进」的存量记录
- * 只统计、不逐条提醒；无大区总（IVD 张塞云/房戈）与查不到归属的一并归入 admin 兜底信。
- * @param {object} args {headers, rows, now, thresholds, userIndex, leadMap, adminEmail, publicUrl}
- * @returns {Array<object>} 每封汇总信 {key, headName, to, subject, text, html, count, byOwner}
+ * 历史欠账汇总（--summary）：清点「超 48 小时未跟进」的存量记录
+ *
+ * mode='owner'（默认，2026-09-29 起）：**按负责人分信** —— 收件人=负责人本人，抄送=其大区总。
+ *   - 若负责人本人即大区总，不重复抄送；
+ *   - 无大区总（IVD 张塞云/房戈）只发负责人本人，不抄送；
+ *   - 负责人为空 / 匹配不到邮箱的，并入 admin 兜底信。
+ * mode='head'：旧行为，按大区总聚合，收件人=大区总（保留供对照审计）。
+ *
+ * @param {object} args {headers, rows, now, thresholds, userIndex, leadMap, adminEmail, publicUrl, mode}
+ * @returns {Array<object>} 每封汇总信 {key, ownerName, headName, to, cc, subject, text, html, count, byOwner}
  */
 export function buildSummary(args) {
   const headers = args.headers || [];
@@ -531,6 +537,7 @@ export function buildSummary(args) {
   const leadMap = args.leadMap || new Map();
   const adminEmail = args.adminEmail || '';
   const publicUrl = args.publicUrl || 'https://leads.chromai.com/';
+  const mode = args.mode === 'head' ? 'head' : 'owner';
 
   const C_ID = colIndex(headers, '跟进编号');
   const C_LD = colIndex(headers, '线索编号');
@@ -539,14 +546,14 @@ export function buildSummary(args) {
   const C_OW = colIndex(headers, '负责人');
   if (C_ID < 0) return [];
 
-  // key → {headName, email, items[]}
+  // key → {key, ownerName, ownerEmail, headName, cc[], items[]}
   const buckets = new Map();
-  const bucketOf = function(headName, email) {
-    const key = headName || '__admin__';
-    if (!buckets.has(key)) {
-      buckets.set(key, { key: key, headName: headName || '', email: email || adminEmail, items: [] });
-    }
-    return buckets.get(key);
+  const bucketOf = function(o) {
+    if (!buckets.has(o.key)) buckets.set(o.key, {
+      key: o.key, ownerName: o.ownerName || '', ownerEmail: o.ownerEmail || adminEmail,
+      headName: o.headName || '', cc: o.cc || [], items: []
+    });
+    return buckets.get(o.key);
   };
 
   rows.forEach(function(row) {
@@ -557,11 +564,30 @@ export function buildSummary(args) {
     if (!isOverdue(followDate, th.stage2Hours, now)) return;  // 只看超 48h 的
     const ownerName = C_OW >= 0 ? String(row[C_OW] || '').trim() : '';
     const owner = ownerName ? userIndex.get(ownerName) : null;
+    const ownerEmail = (owner && owner.email) ? String(owner.email).trim() : '';
     const headName = headOf(owner) || '';
-    const headEmail = (headName && userIndex.get(headName) && userIndex.get(headName).email) || '';
+    const headUser = headName ? userIndex.get(headName) : null;
+    const headEmail = (headUser && headUser.email) ? String(headUser.email).trim() : '';
     const leadId = C_LD >= 0 ? String(row[C_LD] || '').trim() : '';
     const lead = leadMap.get(leadId) || { customer: '', contact: '', phone: '' };
-    bucketOf(headName, headEmail).items.push({
+
+    let b;
+    if (mode === 'owner') {
+      if (ownerName && ownerEmail) {
+        // 负责人本人即大区总时不重复抄送；没有大区总（IVD）则不抄送
+        const cc = (headEmail && headEmail !== ownerEmail) ? [headEmail] : [];
+        b = bucketOf({ key: ownerName, ownerName: ownerName, ownerEmail: ownerEmail, headName: headName, cc: cc });
+      } else {
+        b = bucketOf({ key: '__admin__', ownerName: '', ownerEmail: adminEmail, headName: '', cc: [] });
+      }
+    } else {
+      if (headName && headEmail) {
+        b = bucketOf({ key: headName, ownerName: '', ownerEmail: headEmail, headName: headName, cc: [] });
+      } else {
+        b = bucketOf({ key: '__admin__', ownerName: '', ownerEmail: adminEmail, headName: '', cc: [] });
+      }
+    }
+    b.items.push({
       owner: ownerName || '（无负责人）',
       fupId: String(row[C_ID] || '').trim(),
       leadId: leadId,
@@ -579,7 +605,7 @@ export function buildSummary(args) {
   const out = [];
   buckets.forEach(function(b) {
     if (!b.items.length) return;
-    if (!b.email) return;                                     // 无收件人则跳过（记日志在调用方）
+    if (!b.ownerEmail) return;                                // 无收件人则跳过（记日志在调用方）
     // 按超时时长倒序；同组内按负责人、再按超时倒序
     const byOwnerMap = new Map();
     b.items.sort(function(x, y) { return y.overdueHours - x.overdueHours; });
@@ -590,11 +616,21 @@ export function buildSummary(args) {
     const byOwner = [];
     byOwnerMap.forEach(function(list, owner) { byOwner.push({ owner: owner, items: list }); });
 
-    const who = b.headName ? (b.headName + ' 大区') : 'IVD / 未归属大区';
-    const subject = '【历史欠账汇总】' + who + '有 ' + b.items.length + ' 条超 48 小时未跟进';
+    const isAdminBucket = b.key === '__admin__';
+    const who = mode === 'owner'
+      ? (isAdminBucket ? '未归属负责人（admin 兜底）' : (b.ownerName + '（负责人）'))
+      : (b.headName ? (b.headName + ' 大区') : 'IVD / 未归属大区');
+    const subject = mode === 'owner'
+      ? (isAdminBucket
+        ? '【历史欠账汇总】有 ' + b.items.length + ' 条超 48 小时未跟进的线索待认领'
+        : '【历史欠账汇总】' + b.ownerName + '：你有 ' + b.items.length + ' 条超 48 小时未跟进的线索')
+      : '【历史欠账汇总】' + who + '有 ' + b.items.length + ' 条超 48 小时未跟进';
+    const ccNote = (b.cc && b.cc.length)
+      ? '（本邮件同时抄送 ' + (b.headName || '大区总') + ' ' + b.cc.join('、') + '）'
+      : '';
 
     const lines = [];
-    lines.push('科诺美线索跟进 —— 历史欠账汇总（' + who + '）');
+    lines.push('科诺美线索跟进 —— 历史欠账汇总（' + who + '）' + ccNote);
     lines.push('共 ' + b.items.length + ' 条：未填写「跟进记录」且跟进日期已超过 48 小时。');
     lines.push('统计时间：' + new Date(now).toISOString().slice(0, 16).replace('T', ' ') + ' UTC');
     lines.push('');
@@ -608,12 +644,13 @@ export function buildSummary(args) {
     });
     lines.push('直达链接：' + publicUrl);
     lines.push('');
-    lines.push('说明：本汇总为提醒系统上线前的存量欠账清点，不做逐条提醒；请安排销售补齐「跟进记录」。');
+    lines.push('说明：本汇总为提醒系统上线前的存量欠账清点，不做逐条提醒；请补齐「跟进记录」，之后系统将自动按 48h / 72h 提醒。');
 
     let html = '<div style="font-family:-apple-system,Segoe UI,Microsoft YaHei,sans-serif;max-width:760px">'
       + '<h3 style="margin:0 0 10px;font-size:15px">' + esc(subject) + '</h3>'
       + '<p style="margin:0 0 12px;color:#475569;font-size:12px">统计时间：'
-      + esc(new Date(now).toISOString().slice(0, 16).replace('T', ' ')) + ' UTC</p>';
+      + esc(new Date(now).toISOString().slice(0, 16).replace('T', ' ')) + ' UTC'
+      + (ccNote ? '　' + esc(ccNote) : '') + '</p>';
     byOwner.forEach(function(g) {
       html += '<p style="margin:12px 0 4px;font-size:13px;font-weight:700">' + esc(g.owner)
         + '（' + g.items.length + ' 条）</p><table style="border-collapse:collapse;font-size:12px">'
@@ -628,11 +665,11 @@ export function buildSummary(args) {
       html += '</table>';
     });
     html += '<p style="margin:14px 0 4px"><a href="' + esc(publicUrl) + '">打开线索跟进系统</a></p>'
-      + '<p style="margin:0;color:#94a3b8;font-size:11px">本汇总为提醒系统上线前的存量欠账清点，不做逐条提醒。</p></div>';
+      + '<p style="margin:0;color:#94a3b8;font-size:11px">本汇总为提醒系统上线前的存量欠账清点，不做逐条提醒；请补齐「跟进记录」。</p></div>';
 
     out.push({
-      key: b.key, headName: b.headName, to: b.email, subject: subject,
-      text: lines.join('\r\n'), html: html, count: b.items.length, byOwner: byOwner
+      key: b.key, ownerName: b.ownerName, headName: b.headName, to: b.ownerEmail, cc: b.cc || [],
+      subject: subject, text: lines.join('\r\n'), html: html, count: b.items.length, byOwner: byOwner
     });
   });
 
