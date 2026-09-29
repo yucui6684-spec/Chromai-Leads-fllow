@@ -34,6 +34,7 @@ const ARGS = {
     const i = argv.indexOf('--fixture');
     return i >= 0 && argv[i + 1] ? argv[i + 1] : '';
   })(),
+  summary: argv.includes('--summary'),
   limit: (function() {
     const i = argv.indexOf('--limit');
     return i >= 0 && argv[i + 1] ? parseInt(argv[i + 1], 10) : 0;
@@ -66,7 +67,7 @@ function loadConfig() {
 }
 
 function emptyState() {
-  return { version: 1, createdAt: '', updatedAt: '', baselineAt: '', records: {}, pending: [] };
+  return { version: 1, createdAt: '', updatedAt: '', baselineAt: '', meta: { goLiveAt: 0 }, records: {}, pending: [] };
 }
 
 function loadState() {
@@ -75,6 +76,7 @@ function loadState() {
     const s = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
     s.records = s.records || {};
     s.pending = Array.isArray(s.pending) ? s.pending : [];
+    s.meta = s.meta || { goLiveAt: 0 };
     return s;
   } catch (e) {
     log('state.json 解析失败，按空状态处理（不丢数据，仅重新基线化风险）: ' + e.message);
@@ -260,6 +262,45 @@ async function main() {
   }
   if (ARGS.limit > 0) { fupRows = fupRows.slice(0, ARGS.limit); log('（--limit 截断为 ' + fupRows.length + ' 行）'); }
 
+  // ---- --summary：历史欠账按大区总汇总（显式执行，与正常扫描互斥）----
+  if (ARGS.summary) {
+    const sums = R.buildSummary({
+      headers: fupHeaders, rows: fupRows, now: nowMs, thresholds: cfg.thresholds,
+      userIndex: userIndex, leadMap: leadMap,
+      adminEmail: (cfg.admin && cfg.admin.email) || '',
+      publicUrl: (cfg.site && cfg.site.publicUrl) || 'https://leads.chromai.com/'
+    });
+    log('历史欠账汇总：' + sums.length + ' 封（超 48h 未跟进，按大区总聚合）');
+    if (isDry || !inWindow) {
+      sums.forEach(function(s, i) {
+        log(String(i + 1).padStart(3, ' ') + '. 收件 ' + s.to
+          + ' | ' + (s.headName ? s.headName + ' 大区' : 'IVD / 未归属（admin 兜底）')
+          + ' | ' + s.count + ' 条 | ' + s.subject);
+        s.byOwner.forEach(function(g) {
+          log('       - ' + g.owner + '：' + g.items.length + ' 条（最长超时 '
+            + g.items[0].overdueHours + ' 小时）');
+        });
+      });
+      log('合计汇总 ' + sums.length + ' 封，覆盖 ' + sums.reduce(function(a, s) { return a + s.count; }, 0)
+        + ' 条欠账' + (isDry ? '（dry 未发送）' : '（不在发送窗口，未发送）'));
+    } else {
+      const transport = await Mailer.createTransport(cfg.smtp);
+      let ok = 0, bad = 0;
+      for (const s of sums) {
+        const r = await Mailer.sendMail(transport, {
+          from: cfg.smtp.from, to: s.to, subject: s.subject, text: s.text, html: s.html
+        });
+        if (r.ok) { ok++; log('汇总已发送 → ' + s.to + ' | ' + s.subject); }
+        else { bad++; log('汇总发送失败 → ' + s.to + ' : ' + r.error); }
+      }
+      try { transport.close(); } catch (e) { /* ignore */ }
+      log('汇总发送完成：成功 ' + ok + ' / 失败 ' + bad);
+    }
+    saveState(state);
+    log('===== 运行结束 =====');
+    return;
+  }
+
   const needBaseline = ARGS.init || Object.keys(state.records).length === 0;
 
   // ---- 首次基线：全量记为已发①，一封都不发 ----
@@ -275,21 +316,30 @@ async function main() {
       const id = String(row[C_ID] || '').trim();
       if (!id) return;
       const prev = state.records[id];
+      // ⚠️ 基线必须覆盖 ① ② ③ 三个档位：否则上线前的历史欠账会全部漏出，一次性群发上百封。
+      //    语义 = 「提醒系统上线之前的欠账不补发」，只提醒上线之后新发生的事件。
+      const baseStages = {};
+      [1, 2, 3].forEach(function(st) { baseStages[String(st)] = { status: 'sent', at: at, baseline: true }; });
       state.records[id] = {
         leadId: C_LD >= 0 ? String(row[C_LD] || '').trim() : '',
         owner: C_OW >= 0 ? String(row[C_OW] || '').trim() : '',
         followDate: C_DT >= 0 ? String(row[C_DT] || '').trim() : '',
         firstSeenAt: prev && prev.firstSeenAt ? prev.firstSeenAt : at,
         lastSeenAt: at,
-        stages: (prev && prev.stages) ? prev.stages : { '1': { status: 'sent', at: at, baseline: true } },
+        stages: (prev && prev.stages && Object.keys(prev.stages).length) ? prev.stages : baseStages,
         done: false
       };
       if (!prev) n++;
     });
     state.createdAt = state.createdAt || at;
     state.baselineAt = at;
+    // 上线时刻：第二道闸。即使 state.json 丢失重建，早于该日的行也不再补发历史欠账。
+    if (!state.meta.goLiveAt) state.meta.goLiveAt = nowMs;
     saveState(state);
-    log('基线建立完成：写入 ' + Object.keys(state.records).length + ' 条（新增 ' + n + ' 条），**发出 0 封**');
+    log('基线建立完成：写入 ' + Object.keys(state.records).length + ' 条（新增 ' + n + ' 条），'
+      + '①②③ 三档全部标记为 baseline，**发出 0 封**');
+    log('上线时刻 goLiveAt = ' + new Date(state.meta.goLiveAt).toISOString()
+      + '（早于该日的跟进记录一律跳过，记 before_go_live）');
     log('===== 运行结束 =====');
     return;
   }
@@ -316,10 +366,22 @@ async function main() {
   });
 
   // ---- 判定 ----
+  const goLiveAt = state.meta.goLiveAt || 0;
   const ev = R.evaluate({
     headers: fupHeaders, rows: fupRows, state: state, now: nowMs,
-    thresholds: cfg.thresholds, baseline: false
+    thresholds: cfg.thresholds, baseline: false, goLiveAt: goLiveAt
   });
+  // 新首次出现且已超时 → ②③ 本次抑制（多为补录历史数据，一次发 3 封属于轰炸）
+  ev.suppress.forEach(function(s) {
+    const rec = state.records[s.fupId];
+    if (rec) rec.stages[String(s.stage)] = { status: 'suppressed', at: atIso, reason: s.reason };
+  });
+  if (ev.suppress.length) {
+    log('新增且已超时：抑制 ②③ ' + ev.suppress.length + ' 个档位（只发①，原因：' + (ev.suppress[0] && ev.suppress[0].reason) + '）');
+  }
+  if (ev.beforeGoLive.length) {
+    log('上线日（' + new Date(goLiveAt).toISOString().slice(0, 10) + '）之前的存量记录 ' + ev.beforeGoLive.length + ' 条：跳过，不补发（before_go_live）');
+  }
   // 已填跟进记录 → 取消待发队列中的相关项
   const doneSet = new Set(ev.doneIds);
   let cancelled = 0;
@@ -330,7 +392,9 @@ async function main() {
   if (cancelled) log('已跟进，取消待发队列 ' + cancelled + ' 项');
 
   const dues = R.filterSent(ev.dues, state);
-  log('判定结果：新增 ' + ev.newIds.length + ' 条 / 已跟进 ' + ev.doneIds.length + ' 条 / 待发档位 ' + dues.length + ' 个');
+  log('判定结果：新增 ' + ev.newIds.length + ' 条 / 已跟进 ' + ev.doneIds.length
+    + ' 条 / 上线前存量 ' + ev.beforeGoLive.length + ' 条 / 待发档位 ' + dues.length + ' 个'
+    + (ev.suppress.length ? ' / 抑制 ' + ev.suppress.length + ' 个' : ''));
 
   // ---- 构造通知 ----
   const notifications = [];

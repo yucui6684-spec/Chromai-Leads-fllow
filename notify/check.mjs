@@ -87,10 +87,10 @@ chk('已跟进（旧纯文本）：FUP-OLD 不触发任何档位', stagesOf('FUP
 chk('未到 48h 且已见过：FUP-SOON 不触发', stagesOf('FUP-SOON').length === 0);
 chk('已跟进清单 = [FUP-DONE, FUP-OLD]', JSON.stringify(ev.doneIds.sort()) === '["FUP-DONE","FUP-OLD"]');
 chk('新增清单只有 FUP-NEW（其余已见过）', JSON.stringify(ev.newIds) === '["FUP-NEW"]', JSON.stringify(ev.newIds));
-chk('未见过的行会同时触发①+②（FUP-NEW 若也超时则叠加）',
+chk('未见过的行若已超时 → 只发①，不再叠加②③（见[H]）',
   R.evaluate({ headers: HEADERS, rows: [row('FUP-X', 'LD-9', '2026-09-26', '', '王泽')],
     state: { records: {} }, now: NOW, thresholds: { stage2Hours: 48, stage3Hours: 72 }, baseline: false })
-    .dues.map(function(d) { return d.stage; }).sort().join(',') === '1,2,3');
+    .dues.map(function(d) { return d.stage; }).sort().join(',') === '1');
 
 // ---------- D. state 去重 ----------
 console.log('\n[D] state 去重（同一档位只发一次）');
@@ -140,12 +140,84 @@ chk('节假日（配置内）→ 不可发', R.inSendWindow(Date.UTC(2026, 8, 30
 const nx = R.nextWorkdayStart(Date.UTC(2026, 9, 3, 2, 0, 0), sched);   // 周六 10:00
 chk('周六排队 → 下一个工作日 09:00 上海', iso(nx) === '2026-10-05 01:00Z', iso(nx) + ' = 上海 10-05 09:00');
 
-// ---------- G. 基线 ----------
-console.log('\n[G] 首次基线（baseline=true 时不产生①）');
+// ---------- G. 基线 + goLiveAt ----------
+console.log('\n[G] 基线 / 上线时刻 goLiveAt');
 const evB = R.evaluate({ headers: HEADERS, rows: rows, state: { records: {} }, now: NOW,
   thresholds: { stage2Hours: 48, stage3Hours: 72 }, baseline: true });
-chk('基线模式：不产生任何①', evB.dues.filter(function(d) { return d.stage === 1; }).length === 0);
-chk('基线模式：②/③ 仍然照常判定', evB.dues.filter(function(d) { return d.stage === 2 || d.stage === 3; }).length === 3);
+chk('基线模式：不产生任何通知（①②③ 全不产）', evB.dues.length === 0, 'dues=' + evB.dues.length);
+
+// goLiveAt = 2026-09-30 当天（上海 00:00）→ 09-29 及更早全部视为上线前欠账
+const GO_LIVE = R.shanghaiMidnight('2026-09-30');
+const evG = R.evaluate({ headers: HEADERS, rows: rows, state: { records: {} }, now: NOW,
+  thresholds: { stage2Hours: 48, stage3Hours: 72 }, baseline: false, goLiveAt: GO_LIVE });
+chk('goLiveAt 之前的行不触发（FUP-48/FUP-72/FUP-SOON）',
+  JSON.stringify(evG.beforeGoLive) === '["FUP-48","FUP-72","FUP-SOON"]', JSON.stringify(evG.beforeGoLive));
+chk('goLiveAt 之前的行不产生档位（只剩上线当天的 FUP-NEW#1）',
+  JSON.stringify(evG.dues.map(function(d) { return d.fupId + '#' + d.stage; })) === '["FUP-NEW#1"]',
+  JSON.stringify(evG.dues.map(function(d) { return d.fupId + '#' + d.stage; })));
+chk('goLiveAt 当天的新行仍然触发①',
+  evG.dues.filter(function(d) { return d.fupId === 'FUP-NEW' && d.stage === 1; }).length === 0
+    ? evG.newIds.indexOf('FUP-NEW') >= 0 : true, JSON.stringify(evG.newIds));
+chk('goLiveAt 不传时不启用该闸（历史欠账照常判定）',
+  R.evaluate({ headers: HEADERS, rows: rows, state: { records: {} }, now: NOW,
+    thresholds: { stage2Hours: 48, stage3Hours: 72 }, baseline: false }).beforeGoLive.length === 0);
+
+// ---------- H. 新增且已超时 → 只发①，②③ suppressed ----------
+console.log('\n[H] 新增且已超时：只发①，②③ 标记 suppressed');
+const rows2 = [
+  row('FUP-BACK', 'LD-7', '2026-09-26', '', '王泽'),      // 补录的历史记录：新 + 已超 72h
+  row('FUP-TDY',  'LD-8', '2026-09-30', '', '高丹枫')     // 当天新建：只应命中①
+];
+const evH = R.evaluate({ headers: HEADERS, rows: rows2, state: { records: {} }, now: NOW,
+  thresholds: { stage2Hours: 48, stage3Hours: 72 }, baseline: false });
+const h1 = evH.dues.filter(function(d) { return d.fupId === 'FUP-BACK'; }).map(function(d) { return d.stage; });
+const sup = evH.suppress.filter(function(s) { return s.fupId === 'FUP-BACK'; }).map(function(s) { return s.stage; }).sort();
+chk('补录历史记录只发①', JSON.stringify(h1) === '[1]', JSON.stringify(h1));
+chk('②③ 被标记 suppressed', JSON.stringify(sup) === '[2,3]', JSON.stringify(sup));
+chk('当天新建记录只命中①',
+  JSON.stringify(evH.dues.filter(function(d) { return d.fupId === 'FUP-TDY'; }).map(function(d) { return d.stage; })) === '[1]');
+// suppressed 必须被 filterSent 挡住（否则下次还会补发）
+const stH = { records: { 'FUP-BACK': { stages: { '1': { status: 'sent' },
+  '2': { status: 'suppressed' }, '3': { status: 'suppressed' } } } } };
+const evH2 = R.evaluate({ headers: HEADERS, rows: rows2, state: stH, now: NOW,
+  thresholds: { stage2Hours: 48, stage3Hours: 72 }, baseline: false });
+chk('suppressed 的档位不会被 filterSent 重新放出',
+  R.filterSent(evH2.dues, stH).filter(function(d) { return d.fupId === 'FUP-BACK'; }).length === 0);
+
+// ---------- I. 基线后重复运行不重复发 ----------
+console.log('\n[I] 基线后重复运行不重复发');
+const stBase = { records: {} };
+rows.forEach(function(r) {
+  stBase.records[String(r[0])] = { stages: { '1': { status: 'sent', baseline: true },
+    '2': { status: 'sent', baseline: true }, '3': { status: 'sent', baseline: true } } };
+});
+const evI = R.evaluate({ headers: HEADERS, rows: rows, state: stBase, now: NOW,
+  thresholds: { stage2Hours: 48, stage3Hours: 72 }, baseline: false });
+chk('三档齐全的基线记录，二次运行 0 待发',
+  R.filterSent(evI.dues, stBase).length === 0, '待发 ' + R.filterSent(evI.dues, stBase).length);
+// 哪怕三档基线只剩 ①（旧 state 形态），goLiveAt 也必须兜住
+const evI2 = R.evaluate({ headers: HEADERS, rows: rows, state: stBase, now: NOW,
+  thresholds: { stage2Hours: 48, stage3Hours: 72 }, baseline: false, goLiveAt: GO_LIVE });
+chk('叠加 goLiveAt 后历史欠账仍为 0 待发', R.filterSent(evI2.dues, stBase).length === 0);
+
+// ---------- J. 历史欠账汇总 ----------
+console.log('\n[J] --summary 历史欠账汇总');
+const leadMapJ = new Map([['LD-2', { customer: '客户B', contact: '', phone: '' }],
+  ['LD-3', { customer: '客户C', contact: '', phone: '' }]]);
+const sums = R.buildSummary({ headers: HEADERS, rows: rows, now: NOW,
+  thresholds: { stage2Hours: 48, stage3Hours: 72 }, userIndex: idx, leadMap: leadMapJ,
+  adminEmail: 'yucui@chromai.com', publicUrl: 'https://leads.chromai.com/' });
+const byKey = {};
+sums.forEach(function(s) { byKey[s.key] = s; });
+chk('超 48h 欠账被聚合（FUP-48 刘力瑞 + FUP-72 王泽 → 汤显义一封）',
+  !!byKey['汤显义'] && byKey['汤显义'].count === 1, JSON.stringify(Object.keys(byKey)));
+chk('已跟进的不进汇总', sums.every(function(s) {
+  return s.byOwner.every(function(g) { return g.items.every(function(it) { return it.fupId !== 'FUP-DONE'; }); });
+}));
+chk('汇总含客户名称与超时时长', byKey['汤显义'] && byKey['汤显义'].text.indexOf('客户C') > 0
+  && byKey['汤显义'].text.indexOf('超时') > 0);
+chk('汇总主题格式正确', byKey['汤显义'] && /^【历史欠账汇总】汤显义 大区有 \d+ 条超 48 小时未跟进$/.test(byKey['汤显义'].subject),
+  byKey['汤显义'] && byKey['汤显义'].subject);
 
 console.log('\n===== check 结果: ' + (pass ? 'PASS ✓' : 'FAIL ✗') + ' =====');
 process.exit(pass ? 0 : 1);

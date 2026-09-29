@@ -94,6 +94,31 @@ export function overdueHours(followDate, now) {
 }
 
 /**
+ * 某时间戳所在「上海日期」的当天 00:00（用于 goLiveAt 按天比较，避免当天新建的记录被误判为历史欠账）
+ * @param {number} ts 毫秒时间戳
+ * @returns {number} 当天 00:00（上海）的毫秒时间戳；非法返回 NaN
+ */
+export function shanghaiDayStart(ts) {
+  const t = new Date(Number(ts) + SHANGHAI_OFFSET_MS);
+  if (isNaN(t.getTime())) return NaN;
+  return Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()) - SHANGHAI_OFFSET_MS;
+}
+
+/**
+ * 该行是否属于「提醒系统上线之前」的历史欠账
+ * @param {string} followDate 跟进日期
+ * @param {number} goLiveAt 上线时间戳（state.meta.goLiveAt），0/null 表示不启用该闸
+ * @returns {boolean} true = 上线前，跳过 ①②③
+ */
+export function beforeGoLive(followDate, goLiveAt) {
+  if (!goLiveAt || !isFinite(goLiveAt)) return false;
+  const day = shanghaiDayStart(goLiveAt);
+  const base = shanghaiMidnight(followDate);
+  if (!isFinite(day) || !isFinite(base)) return false;
+  return base < day;
+}
+
+/**
  * 是否处于可发送时段：工作日（周一~周五按 config 配置）且 09:00 ≤ 小时 < 18:00，且非节假日。
  * @param {number} now 时间戳
  * @param {{workdays:number[],windowStartHour:number,windowEndHour:number,holidays:string[]}} schedule
@@ -296,8 +321,10 @@ export function buildHtml(ctx) {
  * @param {object} args.state 运行时状态（{records:{...}}）
  * @param {number} args.now 当前时间戳
  * @param {object} args.thresholds {stage2Hours, stage3Hours}
- * @param {boolean} args.baseline 是否走首次基线（state.records 为空时）
- * @returns {{newIds:string[], dues:Array<object>, doneIds:string[], skipped:Array<object>}}
+ * @param {boolean} args.baseline 是否走首次基线（基线模式不产生任何通知）
+ * @param {number} [args.goLiveAt] 上线时间戳；跟进日期早于上线日的行整体跳过（历史欠账不补发）
+ * @returns {{newIds:string[], dues:Array<object>, doneIds:string[], beforeGoLive:string[],
+ *            suppress:Array<{fupId:string,stage:number,reason:string}>, skipped:Array<object>}}
  */
 export function evaluate(args) {
   const headers = args.headers || [];
@@ -312,11 +339,12 @@ export function evaluate(args) {
   const C_RC = colIndexAny(headers, ['跟进记录', '跟进内容09.14']);
   const C_OW = colIndex(headers, '负责人');
 
-  const out = { newIds: [], dues: [], doneIds: [], skipped: [] };
+  const out = { newIds: [], dues: [], doneIds: [], beforeGoLive: [], suppress: [], skipped: [] };
   if (C_ID < 0) {
     out.skipped.push({ reason: '表头缺少「跟进编号」列，无法判定' });
     return out;
   }
+  const goLiveAt = (typeof args.goLiveAt === 'number' && isFinite(args.goLiveAt)) ? args.goLiveAt : 0;
 
   rows.forEach(function(row, idx) {
     if (!Array.isArray(row)) return;
@@ -331,24 +359,40 @@ export function evaluate(args) {
     // 已有跟进记录 → 不再触发任何档位
     if (count > 0) { out.doneIds.push(fupId); return; }
 
+    // 第二道闸：上线日之前的存量欠账不补发（只提醒上线之后新发生的事件）
+    if (beforeGoLive(followDate, goLiveAt)) { out.beforeGoLive.push(fupId); return; }
+
+    // 基线模式：只落库，不产生任何通知
+    if (args.baseline) return;
+
     const rec = state.records && state.records[fupId];
     const isNew = !rec;
 
     if (isNew) out.newIds.push(fupId);
 
-    // ① 新增（基线模式下不产生 ① 通知，由 index.mjs 直接落库为「已发」）
-    if (isNew && !args.baseline) {
+    const over2 = isOverdue(followDate, th.stage2Hours, now);
+    const over3 = isOverdue(followDate, th.stage3Hours, now);
+
+    // ① 新增
+    if (isNew) {
       out.dues.push({ fupId: fupId, stage: 1, row: idx, owner: owner, followDate: followDate, leadId: leadId, overdueHours: 0 });
     }
 
-    // ② 48h / ③ 72h —— 只要到期且该档未发过即产出（是否真发由 index.mjs 结合 state 去重）
-    if (isOverdue(followDate, th.stage2Hours, now)) {
+    // 新首次出现且已超时 → 只发①，②③ 标记 suppressed（多为补录的历史数据，一次发 3 封属于轰炸）
+    if (isNew && (over2 || over3)) {
+      if (over2) out.suppress.push({ fupId: fupId, stage: 2, reason: '新增记录且已超时，本次只发①' });
+      if (over3) out.suppress.push({ fupId: fupId, stage: 3, reason: '新增记录且已超时，本次只发①' });
+      return;
+    }
+
+    // ② 48h / ③ 72h —— 只要到期即产出（是否真发由 index.mjs 结合 state 去重）
+    if (over2) {
       out.dues.push({
         fupId: fupId, stage: 2, row: idx, owner: owner, followDate: followDate, leadId: leadId,
         overdueHours: overdueHours(followDate, now)
       });
     }
-    if (isOverdue(followDate, th.stage3Hours, now)) {
+    if (over3) {
       out.dues.push({
         fupId: fupId, stage: 3, row: idx, owner: owner, followDate: followDate, leadId: leadId,
         overdueHours: overdueHours(followDate, now)
@@ -356,6 +400,135 @@ export function evaluate(args) {
     }
   });
 
+  return out;
+}
+
+/**
+ * 历史欠账汇总（--summary）：按大区总聚合「超 48 小时未跟进」的存量记录
+ * 只统计、不逐条提醒；无大区总（IVD 张塞云/房戈）与查不到归属的一并归入 admin 兜底信。
+ * @param {object} args {headers, rows, now, thresholds, userIndex, leadMap, adminEmail, publicUrl}
+ * @returns {Array<object>} 每封汇总信 {key, headName, to, subject, text, html, count, byOwner}
+ */
+export function buildSummary(args) {
+  const headers = args.headers || [];
+  const rows = args.rows || [];
+  const now = args.now;
+  const th = args.thresholds || { stage2Hours: 48, stage3Hours: 72 };
+  const userIndex = args.userIndex || new Map();
+  const leadMap = args.leadMap || new Map();
+  const adminEmail = args.adminEmail || '';
+  const publicUrl = args.publicUrl || 'https://leads.chromai.com/';
+
+  const C_ID = colIndex(headers, '跟进编号');
+  const C_LD = colIndex(headers, '线索编号');
+  const C_DT = colIndex(headers, '跟进日期');
+  const C_RC = colIndexAny(headers, ['跟进记录', '跟进内容09.14']);
+  const C_OW = colIndex(headers, '负责人');
+  if (C_ID < 0) return [];
+
+  // key → {headName, email, items[]}
+  const buckets = new Map();
+  const bucketOf = function(headName, email) {
+    const key = headName || '__admin__';
+    if (!buckets.has(key)) {
+      buckets.set(key, { key: key, headName: headName || '', email: email || adminEmail, items: [] });
+    }
+    return buckets.get(key);
+  };
+
+  rows.forEach(function(row) {
+    if (!Array.isArray(row)) return;
+    const count = C_RC >= 0 ? parseFollowupCount(row[C_RC]) : 0;
+    if (count > 0) return;                                    // 已跟进，不算欠账
+    const followDate = C_DT >= 0 ? String(row[C_DT] || '').trim() : '';
+    if (!isOverdue(followDate, th.stage2Hours, now)) return;  // 只看超 48h 的
+    const ownerName = C_OW >= 0 ? String(row[C_OW] || '').trim() : '';
+    const owner = ownerName ? userIndex.get(ownerName) : null;
+    const headName = headOf(owner) || '';
+    const headEmail = (headName && userIndex.get(headName) && userIndex.get(headName).email) || '';
+    const leadId = C_LD >= 0 ? String(row[C_LD] || '').trim() : '';
+    const lead = leadMap.get(leadId) || { customer: '', contact: '', phone: '' };
+    bucketOf(headName, headEmail).items.push({
+      owner: ownerName || '（无负责人）',
+      fupId: String(row[C_ID] || '').trim(),
+      leadId: leadId,
+      customer: lead.customer || '（未关联客户）',
+      followDate: followDate || '—',
+      overdueHours: overdueHours(followDate, now)
+    });
+  });
+
+  const esc = function(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+
+  const out = [];
+  buckets.forEach(function(b) {
+    if (!b.items.length) return;
+    if (!b.email) return;                                     // 无收件人则跳过（记日志在调用方）
+    // 按超时时长倒序；同组内按负责人、再按超时倒序
+    const byOwnerMap = new Map();
+    b.items.sort(function(x, y) { return y.overdueHours - x.overdueHours; });
+    b.items.forEach(function(it) {
+      if (!byOwnerMap.has(it.owner)) byOwnerMap.set(it.owner, []);
+      byOwnerMap.get(it.owner).push(it);
+    });
+    const byOwner = [];
+    byOwnerMap.forEach(function(list, owner) { byOwner.push({ owner: owner, items: list }); });
+
+    const who = b.headName ? (b.headName + ' 大区') : 'IVD / 未归属大区';
+    const subject = '【历史欠账汇总】' + who + '有 ' + b.items.length + ' 条超 48 小时未跟进';
+
+    const lines = [];
+    lines.push('科诺美线索跟进 —— 历史欠账汇总（' + who + '）');
+    lines.push('共 ' + b.items.length + ' 条：未填写「跟进记录」且跟进日期已超过 48 小时。');
+    lines.push('统计时间：' + new Date(now).toISOString().slice(0, 16).replace('T', ' ') + ' UTC');
+    lines.push('');
+    byOwner.forEach(function(g) {
+      lines.push('■ ' + g.owner + '（' + g.items.length + ' 条）');
+      g.items.forEach(function(it, i) {
+        lines.push('   ' + (i + 1) + '. ' + it.fupId + ' | ' + it.customer
+          + ' | 跟进日期 ' + it.followDate + ' | 超时 ' + it.overdueHours + ' 小时 | ' + it.leadId);
+      });
+      lines.push('');
+    });
+    lines.push('直达链接：' + publicUrl);
+    lines.push('');
+    lines.push('说明：本汇总为提醒系统上线前的存量欠账清点，不做逐条提醒；请安排销售补齐「跟进记录」。');
+
+    let html = '<div style="font-family:-apple-system,Segoe UI,Microsoft YaHei,sans-serif;max-width:760px">'
+      + '<h3 style="margin:0 0 10px;font-size:15px">' + esc(subject) + '</h3>'
+      + '<p style="margin:0 0 12px;color:#475569;font-size:12px">统计时间：'
+      + esc(new Date(now).toISOString().slice(0, 16).replace('T', ' ')) + ' UTC</p>';
+    byOwner.forEach(function(g) {
+      html += '<p style="margin:12px 0 4px;font-size:13px;font-weight:700">' + esc(g.owner)
+        + '（' + g.items.length + ' 条）</p><table style="border-collapse:collapse;font-size:12px">'
+        + '<tr style="color:#64748b"><td style="padding:3px 10px">跟进编号</td><td style="padding:3px 10px">客户名称</td>'
+        + '<td style="padding:3px 10px">跟进日期</td><td style="padding:3px 10px">超时</td><td style="padding:3px 10px">线索编号</td></tr>';
+      g.items.forEach(function(it) {
+        html += '<tr><td style="padding:3px 10px">' + esc(it.fupId) + '</td><td style="padding:3px 10px">'
+          + esc(it.customer) + '</td><td style="padding:3px 10px">' + esc(it.followDate)
+          + '</td><td style="padding:3px 10px">' + it.overdueHours + ' 小时</td><td style="padding:3px 10px">'
+          + esc(it.leadId) + '</td></tr>';
+      });
+      html += '</table>';
+    });
+    html += '<p style="margin:14px 0 4px"><a href="' + esc(publicUrl) + '">打开线索跟进系统</a></p>'
+      + '<p style="margin:0;color:#94a3b8;font-size:11px">本汇总为提醒系统上线前的存量欠账清点，不做逐条提醒。</p></div>';
+
+    out.push({
+      key: b.key, headName: b.headName, to: b.email, subject: subject,
+      text: lines.join('\r\n'), html: html, count: b.items.length, byOwner: byOwner
+    });
+  });
+
+  // 大区信在前，admin 兜底信在后
+  out.sort(function(a, b) {
+    if (a.key === '__admin__') return 1;
+    if (b.key === '__admin__') return -1;
+    return b.count - a.count;
+  });
   return out;
 }
 
@@ -371,6 +544,6 @@ export function filterSent(dues, state) {
     const rec = recs[d.fupId];
     if (!rec || !rec.stages) return true;
     const s = rec.stages[String(d.stage)];
-    return !(s && (s.status === 'sent' || s.status === 'pending'));
+    return !(s && (s.status === 'sent' || s.status === 'pending' || s.status === 'suppressed'));
   });
 }
