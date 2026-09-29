@@ -863,6 +863,26 @@ const SYNC_ENABLED = typeof fetch !== 'undefined'; // 浏览器支持 fetch 才�
 let _pulledFromServer = false;  // 本会话是否已成功从服务器拉取过数据（拉取成功前置条件）
 let _pendingPushAfterPull = false; // 因未拉取被暂缓的推送，待拉取成功后补推
 let _confirmBulkDeleteAt = 0;  // 最近一次用户显式删除操作的时间戳（5 分钟内推送允许批量删除）
+
+// ---- 本地新增跟进记录的「未同步保护」----
+// 背景（2026-09-29 事故）：新增记录时若编号撞号，服务端会按「body 内重复编号取第一行」把新增行
+// 静默丢弃并返回 200，随后 PULL 又用服务端数据整体覆盖本地，表现为「新增完过一会儿就没了」，且全程无提示。
+// 这里登记本地新增的跟进编号：PULL 覆盖时保留这些行并自动补推，超过 TTL 仍未同步则放弃保护、回归服务端数据。
+let _fupPendingAdd = {};
+let _fupAddWarnAt = 0;   // 保护提示节流（避免每次 5 秒轮询都弹窗）
+const FUP_PENDING_TTL = 10 * 60 * 1000;
+function markFupPendingAdd(id) { if (id) _fupPendingAdd[String(id).trim()] = Date.now(); }
+function dropFupPendingAdd(id) { if (id) delete _fupPendingAdd[String(id).trim()]; }
+function clearFupPendingAdd() { _fupPendingAdd = {}; }
+function pendingFupIds() {
+  const out = [];
+  const now = Date.now();
+  Object.keys(_fupPendingAdd).forEach(function(k) {
+    if (now - _fupPendingAdd[k] > FUP_PENDING_TTL) delete _fupPendingAdd[k];
+    else out.push(k);
+  });
+  return out;
+}
 let lastSyncTime = 0;     // 上次服务器同步时间戳
 let lastPushTime = parseInt(localStorage.getItem('chromai_lastPush') || '0'); // 上次推送时间戳（防止刷新时旧数据覆盖）
 let lastServerModified = 0;  // 服务器数据最后修改时间戳（用于检测他人更新）
@@ -917,10 +937,37 @@ async function syncFromServer() {
       updated = true;
     }
     if (fupsRes && Array.isArray(fupsRes.data)) {
-      fupsData = fupsRes.data;
+      // 防丢失：服务端还没有、但本地刚新增且尚未确认同步的跟进记录，不能被整体覆盖冲掉。
+      // （否则会出现「新增完过一会儿就没了」：本地 push 成功 → 服务端丢弃 → 8 秒后被这里整体覆盖）
+      const _CI = fupCol('跟进编号', 0);
+      const _pending = pendingFupIds();
+      const _rescued = [];
+      if (_pending.length) {
+        const _srvIds = {};
+        fupsRes.data.forEach(function(r) {
+          const k = r && r[_CI] ? String(r[_CI]).trim() : '';
+          if (k) _srvIds[k] = 1;
+        });
+        (fupsData || []).forEach(function(r) {
+          const k = r && r[_CI] ? String(r[_CI]).trim() : '';
+          if (k && !_srvIds[k] && _pending.indexOf(k) >= 0) _rescued.push(r);
+        });
+      }
+      fupsData = _rescued.length ? fupsRes.data.concat(_rescued) : fupsRes.data;
       if (Array.isArray(fupsRes.headers) && fupsRes.headers.length > 0) FUP_HEADERS = fupsRes.headers;
       _pulledFromServer = true;
       updated = true;
+      if (_rescued.length) {
+        const _ids = _rescued.map(function(r) { return String(r[_CI] || '').trim(); }).join('、');
+        console.warn('拉取时保留了 ' + _rescued.length + ' 条尚未同步到服务器的新增跟进记录：' + _ids);
+        if (Date.now() - _fupAddWarnAt > 30000) {
+          _fupAddWarnAt = Date.now();
+          toast('有 ' + _rescued.length + ' 条新增跟进记录尚未同步到服务器（' + _ids
+            + '），已保留在本地并自动重试上传；若持续失败请联系管理员。', 'warn');
+        }
+        // 稍后补推一次，让这些行真正落到服务端
+        setTimeout(function() { syncToServer(); }, 500);
+      }
     }
     if (flowRes && flowRes.data) {
       if (flowRes.data.stages) flowStages = flowRes.data.stages;
@@ -1058,7 +1105,13 @@ async function syncToServer() {
     serverOnline = false;
     var syncEl = document.getElementById('syncStatus');
     if (syncEl) syncEl.textContent = '🟡 同步失败，已存本地';
-    if (e.message && (e.message.indexOf('越权') >= 0 || e.message.indexOf('批量删除') >= 0 || e.message.indexOf('保护拦截') >= 0)) toast(e.message, 'err');
+    if (e.message && (e.message.indexOf('越权') >= 0 || e.message.indexOf('批量删除') >= 0 || e.message.indexOf('保护拦截') >= 0)) {
+      toast(e.message, 'err');
+    } else if (Date.now() - _fupAddWarnAt > 30000) {
+      // 其余失败（网络异常 / 「部分API返回错误」）此前完全静默，用户会以为什么都保存成功了
+      _fupAddWarnAt = Date.now();
+      toast('同步到服务器失败，改动已存在本机并会自动重试；请勿关闭页面以免丢失。', 'warn');
+    }
   }
 }
 
@@ -43337,15 +43390,13 @@ function appendFupPlan(rowIdx) {
   const C_OW = fupCol('负责人', 14);
   const C_PL = fupCol('下一步计划', 13);
 
-  const maxNum = fupsData.reduce(function(m, row) {
-    const mm = String((row && row[C_ID]) || '').match(/FUP-2026-(\d+)/);
-    return mm ? Math.max(m, parseInt(mm[1], 10)) : m;
-  }, 0);
+  const newId = nextFupId();
   const now = new Date();
   const dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
 
   const newRow = new Array(Math.max(FUP_HEADERS.length, 15)).fill('');
-  newRow[C_ID] = 'FUP-2026-' + String(maxNum + 1).padStart(4, '0');
+  newRow[C_ID] = newId;
+  markFupPendingAdd(newId);
   newRow[C_LD] = String(r[C_LD] || '').trim();
   newRow[C_DT] = dateStr;
   newRow[C_OW] = String(r[C_OW] || '').trim();
@@ -44109,14 +44160,27 @@ function submitNewLead() {
 // MQL≥60 自动分配到跟进记录 + 手动添加
 // ============================================================
 
+// 生成下一个跟进编号：必须取现有「最大编号 + 1」，绝不能用 fupsData.length + 1。
+// 历史删除会留下编号空洞（286 行但最大编号已是 0289），用 length+1 会撞上已有编号；
+// 撞号后服务端 _acl.js「body 内重复编号取第一行」会把新增行静默丢弃（返回 200，无任何日志）。
+function nextFupId() {
+  const C_ID = fupCol('跟进编号', 0);
+  const maxNum = (fupsData || []).reduce(function(m, row) {
+    const mm = String((row && row[C_ID]) || '').match(/FUP-\d{4}-(\d+)/);
+    return mm ? Math.max(m, parseInt(mm[1], 10)) : m;
+  }, 0);
+  return 'FUP-' + new Date().getFullYear() + '-' + String(maxNum + 1).padStart(4, '0');
+}
+
 // 创建一条跟进记录（内部辅助函数）
 // ⚠️ 按当前 FUP_HEADERS 动态构造，自定义列插入/删除后仍能对齐
 function createFollowupRow(lead) {
   const now = new Date();
   const dateStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
-  const fupNum = String(fupsData.length + 1).padStart(4, '0');
+  const newId = nextFupId();
   const row = new Array(Math.max(FUP_HEADERS.length, 15)).fill('');
-  row[fupCol('跟进编号', 0)] = 'FUP-2026-'+fupNum;
+  row[fupCol('跟进编号', 0)] = newId;
+  markFupPendingAdd(newId);
   row[fupCol('线索编号', 1)] = (lead[0] || '').trim();
   row[fupCol('跟进日期', 2)] = dateStr;
   // 自动带入该线索最近一条跟进的跟进内容（无则留空，销售可修改）
@@ -44205,11 +44269,12 @@ function addFollowup() {
 
   const now = new Date();
   const dateStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
-  const fupNum = String(fupsData.length + 1).padStart(4, '0');
+  const newFupId = nextFupId();
 
   // 按当前 FUP_HEADERS 动态构造新行（自定义列插入/删除后仍能对齐）
   const newRow = new Array(Math.max(FUP_HEADERS.length, 15)).fill('');
-  newRow[fupCol('跟进编号', 0)] = `FUP-2026-${fupNum}`;
+  newRow[fupCol('跟进编号', 0)] = newFupId;
+  markFupPendingAdd(newFupId);
   newRow[fupCol('线索编号', 1)] = defLeadId;
   newRow[fupCol('跟进日期', 2)] = dateStr;
   newRow[fupCol('负责人', 14)] = defSales;
