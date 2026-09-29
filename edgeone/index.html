@@ -42753,8 +42753,8 @@ function renderFollowups() {
         tds += `<td data-col="${ci}" class="fup-leadcell editable">${fupCellHtml(hd, val, origIdx, ci)}</td>`;
         // 虚拟列：客户名称(脱敏) + 联系人（实时取自线索池，不占数据列）
         const lead = leadMap[(val || '').trim()];
-        // 客户名称与「首次反馈」同区间（200~420）自动换行；联系人不设宽度，由内容驱动
-        tds += `<td class="fup-ghost fup-wide" title="${lead?h(lead[L_CNAME2]||''):''}">${lead ? `<span class="fup-ghost-link" onclick="event.stopPropagation();openFupDetail(${origIdx})" title="点击查看该线索完整信息">${h(lead[L_CNAME2] || '—')}</span>` : '<span class="fup-ghost-dim">未关联</span>'}</td>`;
+        // 客户名称：120~240 区间（比首次反馈窄，实测 200 太宽），仍自动换行；联系人不设宽度，由内容驱动
+        tds += `<td class="fup-ghost fup-wide" style="min-width:${FUP_CNAME_MIN}px;max-width:${FUP_CNAME_MAX}px" title="${lead?h(lead[L_CNAME2]||''):''}">${lead ? `<span class="fup-ghost-link" onclick="event.stopPropagation();openFupDetail(${origIdx})" title="点击查看该线索完整信息">${h(lead[L_CNAME2] || '—')}</span>` : '<span class="fup-ghost-dim">未关联</span>'}</td>`;
         tds += `<td class="fup-ghost" title="${lead?h(lead[L_CONTACT2]||''):''}">${lead ? `<span class="fup-ghost-link" onclick="event.stopPropagation();openFupDetail(${origIdx})" title="点击查看该线索完整信息">${h(lead[L_CONTACT2] || '—')}</span>` : '<span class="fup-ghost-dim">—</span>'}</td>`;
       } else if (ci === fupRecCol()) {
         // 跟进记录：显示子项条数 + 最新一条（日期 + 内容预览），点击打开详情弹窗编辑子项
@@ -42798,8 +42798,8 @@ function renderFollowups() {
       return '<th style="width:120px;text-align:center" title="跟进日期起48小时内需填写「跟进记录」，超时未填写整行标红">⏱ 48h时限</th><th style="width:50px;text-align:center">操作</th>';
     }
     if (hd === '线索编号') {
-      // 虚拟列：客户名称/联系人（实时取自线索池）；客户名称与「首次反馈」同区间（200~420），联系人不设宽度、由内容驱动
-      return '<th style="min-width:90px">'+h(hd)+'</th><th class="fup-wide" style="min-width:'+FUP_WIDE_MIN+'px;max-width:'+FUP_WIDE_MAX+'px;text-align:center" title="自动带入市场留资清单的客户名称(脱敏)">👤 客户名称</th><th style="text-align:center" title="自动带入市场留资清单的联系人">🧑 联系人</th>';
+      // 虚拟列：客户名称/联系人（实时取自线索池）；客户名称 120~240（比首次反馈窄），联系人不设宽度、由内容驱动
+      return '<th style="min-width:90px">'+h(hd)+'</th><th class="fup-wide" style="min-width:'+FUP_CNAME_MIN+'px;max-width:'+FUP_CNAME_MAX+'px;text-align:center" title="自动带入市场留资清单的客户名称(脱敏)">👤 客户名称</th><th style="text-align:center" title="自动带入市场留资清单的联系人">🧑 联系人</th>';
     }
     const delBtn = (!FUP_DEFAULT_HEADERS.includes(hd) && FUP_PROTECTED_LEGACY.indexOf(hd) < 0)
       ? `<span class="col-del" onclick="event.stopPropagation();removeColumn('followups',${i})" title="删除此列">✕</span>` : '';
@@ -42822,7 +42822,7 @@ function renderFollowups() {
 </div>
 <div class="table-wrap fup-list">
   <table class="fup-table">
-    <colgroup><col style="width:36px">${FUP_HEADERS.map((hd,ci)=>hd==='线索编号'?('<col style="min-width:90px"><col style="min-width:'+FUP_WIDE_MIN+'px;max-width:'+FUP_WIDE_MAX+'px"><col>'):(hd==='操作'?'<col style="width:120px"><col style="width:50px">':(fupIsWideCol(hd,ci)?('<col style="min-width:'+FUP_WIDE_MIN+'px;max-width:'+FUP_WIDE_MAX+'px">'):'<col>'))).join('')}</colgroup>
+    <colgroup><col style="width:36px">${FUP_HEADERS.map((hd,ci)=>hd==='线索编号'?('<col style="min-width:90px"><col style="min-width:'+FUP_CNAME_MIN+'px;max-width:'+FUP_CNAME_MAX+'px"><col>'):(hd==='操作'?'<col style="width:120px"><col style="width:50px">':(fupIsWideCol(hd,ci)?('<col style="min-width:'+FUP_WIDE_MIN+'px;max-width:'+FUP_WIDE_MAX+'px">'):'<col>'))).join('')}</colgroup>
     <thead><tr>${fupHeaderHtml}</tr></thead>
     <tbody>${rows}</tbody>
   </table>
@@ -42863,6 +42863,8 @@ const FUP_PILL_COLS = ['跟进方式', '预算确认', '阶段变化'];
 // 长文本列宽度：按内容自适应，而非写死固定值——需求七（用户反馈：不能 3、4 个字就换行，也不能撑爆横向）
 const FUP_WIDE_MIN = 200;   // 长文本列保底宽度：防止窄到 3-4 个字就换行
 const FUP_WIDE_MAX = 420;   // 上限：避免单条内容过长把表格横向撑爆
+const FUP_CNAME_MIN = 120;  // 虚拟列「客户名称」宽度下限（实测 200 太宽）
+const FUP_CNAME_MAX = 240;  // 上限：公司名过长时折行，避免挤占其它列
 
 /**
  * 「跟进记录」列索引（单元格存 JSON 子项数组字符串）。
