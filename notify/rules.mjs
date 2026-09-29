@@ -314,6 +314,114 @@ export function buildHtml(ctx) {
 }
 
 /**
+ * 合并邮件主题：同一负责人 + 同一档位的多条线索合成一封
+ * @param {number} stage 1/2/3
+ * @param {number} count 该封包含几条线索
+ * @param {string} firstName 第一条的客户名称（只有 1 条时用它，多条时改为条数）
+ * @returns {string}
+ */
+export function buildSubjectMulti(stage, count, firstName) {
+  const n = Number(count) || 0;
+  const c = String(firstName || '').trim() || '（未关联客户）';
+  if (stage === 1) {
+    return n > 1 ? '【新线索待跟进】你有 ' + n + ' 条新线索待跟进' : '【新线索待跟进】' + c;
+  }
+  if (stage === 2) {
+    return n > 1 ? '【跟进提醒】你有 ' + n + ' 条线索已超 48 小时未跟进' : '【跟进提醒】' + c + ' 已 48 小时未跟进';
+  }
+  if (stage === 3) {
+    return n > 1 ? '【超时升级】你有 ' + n + ' 条线索已超 72 小时未跟进' : '【超时升级】' + c + ' 已 72 小时未跟进';
+  }
+  return '【跟进提醒】' + c;
+}
+
+/** 合并邮件的档位标题 */
+function stageTitle(stage) {
+  if (stage === 1) return '新线索待跟进';
+  if (stage === 2) return '已 48 小时未跟进';
+  if (stage === 3) return '已 72 小时未跟进（已升级抄送大区总）';
+  return '需跟进';
+}
+
+/**
+ * 合并邮件正文（纯文本）：一个负责人 + 一个档位 = 一封，内含该负责人名下全部线索
+ * @param {number} stage
+ * @param {string} owner 负责人姓名
+ * @param {Array<object>} items buildText 同结构的 ctx 数组
+ * @returns {string}
+ */
+export function buildTextMulti(stage, owner, items) {
+  const list = Array.isArray(items) ? items : [];
+  const lines = [];
+  lines.push('科诺美线索跟进提醒：' + stageTitle(stage) + '（共 ' + list.length + ' 条）');
+  lines.push('');
+  lines.push('负责人：' + (owner || '—'));
+  lines.push('');
+  list.forEach(function(c, i) {
+    const x = c || {};
+    lines.push('—— 第 ' + (i + 1) + ' 条：' + (x.customer || '（未关联客户）') + ' ——');
+    lines.push('  跟进编号：' + (x.fupId || '—') + '　线索编号：' + (x.leadId || '—'));
+    lines.push('  跟进日期：' + (x.followDate || '—')
+      + (stage === 1 ? '' : '（已超时 ' + (x.overdueHours || 0) + ' 小时）'));
+    lines.push('  联系人：' + (x.contact || '—') + '　联系电话：' + (x.phone || '—'));
+    lines.push('  产品型号意向：' + (x.model || '—') + '　预算范围(万元)：' + (x.budget || '—')
+      + '　采购时间窗：' + (x.window || '—'));
+    lines.push('  首次反馈：' + (x.firstFeedback || '—'));
+    lines.push('  下一步计划：' + (x.nextPlan || '—'));
+    lines.push('');
+  });
+  lines.push('请登录线索系统，为以上线索填写「跟进记录」，填写后即停止提醒。');
+  lines.push((list[0] && list[0].publicUrl) || 'https://leads.chromai.com/');
+  return lines.join('\n');
+}
+
+/**
+ * 合并邮件正文（HTML）
+ * @param {number} stage
+ * @param {string} owner
+ * @param {Array<object>} items
+ * @returns {string}
+ */
+export function buildHtmlMulti(stage, owner, items) {
+  const list = Array.isArray(items) ? items : [];
+  const esc = function(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+  const url = (list[0] && list[0].publicUrl) || 'https://leads.chromai.com/';
+  let html = '<div style="font-family:-apple-system,Segoe UI,Microsoft YaHei,sans-serif;max-width:680px">'
+    + '<h3 style="margin:0 0 10px;font-size:15px;color:#0f172a">科诺美线索跟进提醒：'
+    + esc(stageTitle(stage)) + '（共 ' + list.length + ' 条）</h3>'
+    + '<p style="margin:0 0 14px;font-size:13px;color:#334155">负责人：' + esc(owner || '—') + '</p>';
+
+  list.forEach(function(c, i) {
+    const x = c || {};
+    const row = function(k, v) {
+      return '<tr><td style="padding:3px 10px;color:#64748b;font-size:12px;white-space:nowrap">' + esc(k)
+        + '</td><td style="padding:3px 10px;color:#0f172a;font-size:13px">' + esc(v || '—') + '</td></tr>';
+    };
+    html += '<div style="margin:0 0 14px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px">'
+      + '<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:6px">'
+      + (i + 1) + '. ' + esc(x.customer || '（未关联客户）')
+      + (stage === 1 ? '' : '　<span style="color:#b91c1c;font-weight:400;font-size:12px">已超时 '
+        + (x.overdueHours || 0) + ' 小时</span>')
+      + '</div>'
+      + '<table style="border-collapse:collapse">'
+      + row('跟进编号', x.fupId) + row('线索编号', x.leadId) + row('跟进日期', x.followDate)
+      + row('联系人', x.contact) + row('联系电话', x.phone)
+      + row('产品型号意向', x.model) + row('预算范围(万元)', x.budget) + row('采购时间窗', x.window)
+      + row('首次反馈', x.firstFeedback) + row('下一步计划', x.nextPlan)
+      + '</table></div>';
+  });
+
+  html += '<p style="margin:14px 0 4px"><a href="' + esc(url) + '">打开线索跟进系统</a></p>'
+    + '<p style="margin:0;color:#94a3b8;font-size:11px">'
+    + '本邮件由线索跟进管理系统自动发送，为上述线索填写「跟进记录」后即停止提醒。</p>'
+    + '</div>';
+  return html;
+}
+
+/**
  * 核心判定：扫描跟进记录行，产出「应发」清单（不负责是否已发过，由 index.mjs 结合 state 去重）
  * @param {object} args
  * @param {string[]} args.headers 跟进表头

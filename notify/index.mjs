@@ -214,6 +214,14 @@ function buildNotification(stage, row, headers, leadMap, cfg, userIndex) {
     followDate: ctx.followDate,
     overdueHours: ctx.overdueHours,
     customer: ctx.customer,
+    contact: ctx.contact,
+    phone: ctx.phone,
+    model: ctx.model,
+    budget: ctx.budget,
+    window: ctx.window,
+    firstFeedback: ctx.firstFeedback,
+    nextPlan: ctx.nextPlan,
+    publicUrl: ctx.publicUrl,
     subject: R.buildSubject(stage, ctx.customer),
     text: R.buildText(ctx),
     html: R.buildHtml(ctx)
@@ -409,6 +417,36 @@ async function main() {
     skipped.forEach(function(s) { log('跳过：' + s.fupId + ' —— ' + s.reason); });
   }
 
+  // ---- 按「负责人 + 档位」合并：同一人多条线索只发一封，不逐条轰炸 ----
+  const groupMap = new Map();
+  notifications.forEach(function(n) {
+    const key = n.stage + '#' + n.to;
+    let g = groupMap.get(key);
+    if (!g) {
+      g = { stage: n.stage, to: n.to, cc: n.cc || [], head: n.head, noHead: n.noHead, items: [] };
+      groupMap.set(key, g);
+    }
+    g.items.push(n);
+  });
+  const mails = Array.from(groupMap.values()).map(function(g) {
+    const first = g.items[0];
+    return {
+      stage: g.stage,
+      to: g.to,
+      cc: g.cc,
+      head: g.head,
+      noHead: g.noHead,
+      fupIds: g.items.map(function(x) { return x.fupId; }),
+      items: g.items,
+      subject: R.buildSubjectMulti(g.stage, g.items.length, first.customer),
+      text: R.buildTextMulti(g.stage, first.owner, g.items),
+      html: R.buildHtmlMulti(g.stage, first.owner, g.items)
+    };
+  });
+  if (notifications.length !== mails.length) {
+    log('已合并：' + notifications.length + ' 条线索 → ' + mails.length + ' 封邮件（同一负责人同一档位合并）');
+  }
+
   // ---- 待发队列补发（仅发送窗口内）----
   let flushed = 0;
   if (state.pending.length) {
@@ -425,12 +463,15 @@ async function main() {
         });
         if (r.ok) {
           flushed++;
-          const rec = state.records[p.fupId];
-          if (rec) rec.stages[String(p.stage)] = { status: 'sent', at: new Date().toISOString(), queued: true };
-          log('补发成功 ' + STAGE_NAME[p.stage] + ' → ' + p.to + ' | ' + p.subject);
+          const ids = Array.isArray(p.fupIds) && p.fupIds.length ? p.fupIds : [p.fupId];
+          ids.forEach(function(id) {
+            const rec = state.records[id];
+            if (rec) rec.stages[String(p.stage)] = { status: 'sent', at: new Date().toISOString(), queued: true };
+          });
+          log('补发成功 ' + STAGE_NAME[p.stage] + ' → ' + p.to + ' | ' + ids.length + ' 条 | ' + p.subject);
         } else {
           remain.push(p);
-          log('补发失败（保留队列）' + p.fupId + ' → ' + p.to + ' : ' + r.error);
+          log('补发失败（保留队列）' + (p.fupIds || [p.fupId]).join(',') + ' → ' + p.to + ' : ' + r.error);
         }
       }
       try { transport.close(); } catch (e) { /* ignore */ }
@@ -443,52 +484,65 @@ async function main() {
   let sent = 0, queued = 0, failed = 0;
   if (isDry) {
     log('---- 待发清单（dry，未发送）----');
-    notifications.forEach(function(n, i) {
-      log(String(i + 1).padStart(3, ' ') + '. ' + STAGE_NAME[n.stage]
-        + ' | ' + n.fupId + ' | 收件 ' + n.to
-        + ccDesc(n)
-        + ' | ' + n.subject);
+    mails.forEach(function(m, i) {
+      log(String(i + 1).padStart(3, ' ') + '. ' + STAGE_NAME[m.stage]
+        + ' | ' + m.items.length + ' 条 | 收件 ' + m.to
+        + ccDesc(m.items[0])
+        + ' | ' + m.subject);
+      m.items.forEach(function(x, j) {
+        log('         ' + (j + 1) + ') ' + x.fupId + '  ' + (x.customer || '（未关联客户）')
+          + '  超时 ' + x.overdueHours + 'h');
+      });
     });
-    log('合计待发 ' + notifications.length + ' 封（dry 未发送）');
+    log('合计待发 ' + mails.length + ' 封（共 ' + notifications.length + ' 条线索，dry 未发送）');
   } else if (!inWindow) {
-    const seen = new Set(state.pending.map(function(p) { return p.fupId + '#' + p.stage; }));
-    notifications.forEach(function(n) {
-      const key = n.fupId + '#' + n.stage;
+    const seen = new Set(state.pending.map(function(p) { return p.stage + '#' + p.to; }));
+    mails.forEach(function(m) {
+      const key = m.stage + '#' + m.to;
       if (seen.has(key)) return;
       seen.add(key);
       state.pending.push({
-        fupId: n.fupId, stage: n.stage, to: n.to, cc: n.cc,
-        subject: n.subject, text: n.text, html: n.html, queuedAt: atIso
+        fupIds: m.fupIds, stage: m.stage, to: m.to, cc: m.cc,
+        subject: m.subject, text: m.text, html: m.html, queuedAt: atIso
       });
-      const rec = state.records[n.fupId];
-      if (rec) rec.stages[String(n.stage)] = { status: 'pending', at: atIso };
+      m.fupIds.forEach(function(id) {
+        const rec = state.records[id];
+        if (rec) rec.stages[String(m.stage)] = { status: 'pending', at: atIso };
+      });
       queued++;
     });
     const nx = new Date(R.nextWorkdayStart(nowMs, cfg.schedule));
     log('不在发送窗口：入队 ' + queued + ' 封，预计 ' + nx.toISOString().slice(0, 16).replace('T', ' ') + '（上海时间）后补发');
   } else {
     const transport = await Mailer.createTransport(cfg.smtp);
-    for (const n of notifications) {
+    for (const m of mails) {
       const r = await Mailer.sendMail(transport, {
-        from: cfg.smtp.from, to: n.to, cc: n.cc, subject: n.subject, text: n.text, html: n.html
+        from: cfg.smtp.from, to: m.to, cc: m.cc, subject: m.subject, text: m.text, html: m.html
       });
-      n.sentAt = new Date().toISOString();
-      n.dryRun = false;
+      const at = new Date().toISOString();
+      m.items.forEach(function(x) { x.sentAt = at; x.dryRun = false; });
       if (r.ok) {
         sent++;
-        const rec = state.records[n.fupId];
-        if (rec) rec.stages[String(n.stage)] = { status: 'sent', at: n.sentAt };
-        log('已发送 ' + STAGE_NAME[n.stage] + ' → ' + n.to + (n.cc.length ? '（抄送 ' + n.cc.join(',') + '）' : '')
-          + (n.noHead ? '（无大区总，仅记日志）' : '') + ' | ' + n.subject);
+        m.fupIds.forEach(function(id) {
+          const rec = state.records[id];
+          if (rec) rec.stages[String(m.stage)] = { status: 'sent', at: at };
+        });
+        log('已发送 ' + STAGE_NAME[m.stage] + ' → ' + m.to
+          + (m.cc.length ? '（抄送 ' + m.cc.join(',') + '）' : '')
+          + (m.noHead ? '（无大区总，仅记日志）' : '')
+          + ' | ' + m.items.length + ' 条 | ' + m.subject);
       } else {
         failed++;
-        log('发送失败 ' + n.fupId + ' → ' + n.to + ' : ' + r.error);
+        log('发送失败 ' + m.fupIds.join(',') + ' → ' + m.to + ' : ' + r.error);
       }
-      const h = await Hub.push(cfg.hub, n);
-      if (!h.skipped && !h.ok) log('hub 推送失败 ' + n.fupId + ' : ' + (h.error || h.status));
+      // hub 通知按「线索」推送（每条一条），与邮件按人合并无关
+      for (const x of m.items) {
+        const h = await Hub.push(cfg.hub, x);
+        if (!h.skipped && !h.ok) log('hub 推送失败 ' + x.fupId + ' : ' + (h.error || h.status));
+      }
     }
     try { transport.close(); } catch (e) { /* ignore */ }
-    log('发送完成：成功 ' + sent + ' / 失败 ' + failed);
+    log('发送完成：成功 ' + sent + ' 封 / 失败 ' + failed + ' 封（共 ' + notifications.length + ' 条线索）');
   }
 
   // dry 模式下也尝试 hub（仅在启用时才有副作用）
