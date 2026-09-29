@@ -141,6 +141,21 @@ schtasks /Delete /TN "ChromaiLeadsNotify" /F
 > 计划任务里要带 `SMTP_PASS`：要么用 `setx` 写到用户环境变量（重启后生效，任务以同一用户运行时可读），
 > 要么在任务属性的「起始位置」填 notify 目录并改用包装 .bat（内部 `set SMTP_PASS=...`）。
 
+## 发信账号与自检（2026-09-29 已跑通）
+
+- 发信：`contact@chromai.com`，SMTP `smtp.exmail.qq.com:465`（SSL）
+- 密码：腾讯企业邮**客户端专用密码**，存在 `config.json`（已 gitignore），也可用环境变量 `SMTP_PASS` 覆盖
+- ⚠️ 登录密码**不能**用于 SMTP，必须用「设置 → 账户 → 安全设置 / 客户端专用密码」生成的那串（否则 535）
+- ⚠️ 发送时 `from` 必须与认证账号一致，否则 501 `mail from address must be same as authorization user`
+
+验证通道（只发给 `config.selftest.to`，默认管理员本人，不会打扰销售）：
+
+```bat
+node selftest.mjs
+```
+
+它会取线上 3 条真实未跟进记录生成一封正式排版的邮件（主题带【测试】），用来确认排版与送达。
+
 ## hub 推送
 
 `config.hub.enabled = true` 后才会 POST 到 `{hub.url}/rest/v1/hub_messages`
